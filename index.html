@@ -214,6 +214,18 @@
     box-shadow:0 4px 16px rgba(0,0,0,.5);}
   #bookModal{display:none; position:fixed; inset:0; z-index:22; background:rgba(8,6,4,.88); overflow-y:auto; padding:20px;}
   #questModal{display:none; position:fixed; inset:0; z-index:22; background:rgba(8,6,4,.9); overflow-y:auto; padding:20px;}
+  /* pinned-quest tracker — a half-faded whisper down the left of the world */
+  #questTracker{position:fixed; left:10px; top:118px; z-index:6; max-width:236px; pointer-events:none;
+    display:flex; flex-direction:column; gap:6px; opacity:.62; transition:opacity .25s;}
+  #questTracker:hover{opacity:.95;}
+  .qtCard{background:rgba(12,10,8,.72); border:1px solid rgba(216,180,106,.35); border-radius:8px;
+    padding:6px 9px; font-size:11.5px; line-height:1.35; color:#e8dcc4; box-shadow:0 2px 8px rgba(0,0,0,.35);}
+  .qtCard .qtName{color:var(--gold); font-weight:bold; font-size:12px;}
+  .qtCard .qtWhere{opacity:.6; font-style:italic; font-size:10.5px;}
+  .qtCard .qtObj{opacity:.85; margin-top:2px;}
+  .qtCard.qtDone{opacity:.55;} .qtCard.qtDone .qtObj{color:var(--green);}
+  .qpin{cursor:pointer; margin-left:6px; opacity:.5; font-size:13px;} .qpin:hover{opacity:1;}
+  .qpin.on{opacity:1; filter:drop-shadow(0 0 3px var(--gold));}
   #questInner{max-width:1000px; margin:0 auto; background:linear-gradient(160deg,#2b2416,#221c11); border:2px solid var(--gold-dim); border-radius:14px; padding:16px 20px; box-shadow:0 12px 50px rgba(0,0,0,.7);}
   #questHead{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
   #questTabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;}
@@ -593,6 +605,7 @@
   </div>
   </div></div><!-- /menuInner /menuModal -->
 
+  <div id="questTracker"></div>
   <div id="questModal"><div id="questInner">
     <div id="questHead">
       <span style="color:var(--gold);font-size:16px">📋 Quest Log</span>
@@ -944,6 +957,7 @@ const SETS = {
   hollowveil:  {n:'Hollowveil Raiment',dun:'ravensworth', i:'\u{1F3DA}\uFE0F', tier:4, req:30, bonus:{hook:'maxhp', v:12}},
   rimebound:   {n:'Rimebound Mail',    dun:'icefang',     i:'❄️', tier:4, req:32, bonus:{hook:'def',       v:15}, warm:true},
   moltenforge: {n:'Moltenforge Plate', dun:'depths',      i:'\u{1F30B}', tier:5, req:38, bonus:{hook:'dmg', v:10}},
+  silkspun:    {n:'Silkspun Vestments', dun:'broodhollow', i:'🕸️', tier:4, req:28, bonus:{hook:'mobloot', v:20}},
   inkbound:    {n:'Inkbound Vestments',dun:'fathom',      i:'\u{1F4D6}', tier:6, req:50, bonus:{hook:'allxp', v:14}},
   /* Vessarix's gift for avenging her clutch — a mage set, and not from any dungeon chest */
   dragonfire:  {n:'Dragonfire Regalia', dun:'__vessarix', i:'\u{1F409}', tier:6, req:40, cls:'magic', reqSkill:'magic',
@@ -960,6 +974,7 @@ const SET_PIECE_NAMES = {
   hollowveil:['Hollowveil hood','Hollowveil gown','Hollowveil leggings'],
   rimebound:['Rimebound coif','Rimebound hauberk','Rimebound chausses'],
   moltenforge:['Moltenforge helm','Moltenforge breastplate','Moltenforge legguards'],
+  silkspun:['Silkspun cowl','Silkspun wrap','Silkspun leggings'],
   inkbound:['Inkbound hood','Inkbound vestment','Inkbound wraps'],
   dragonfire:['Dragonfire crown','Dragonfire robe','Dragonfire leggings'],
   fisher:["Fisher's hat","Fisher's jacket","Fisher's waders"],
@@ -1473,6 +1488,25 @@ SMITHS.push({id:'starforged_blade', lvl:50, xp:2400, inp:{meteoric_slag:1, rune_
 CRAFTS.push({id:'facetstar_staff',  lvl:50, xp:2400, inp:{flawless_facet:1, elder_logs:6, uncut_diamond:2}, time:9});
 TAILOR.push({id:'goldspun_mantle',  lvl:48, xp:2400, inp:{goldspun_thread:1, cloudflax:8, astral_thread:2}, time:9});
 COOKS.push({id:'everflame_roast',   lvl:46, xp:1200, inp:{everflame_ember:1, raw_shark:2}, stop:1, time:7});
+/* ---- the five secret guilds: their exclusive wares. Recipes carry g:'<guild>'
+   and stay entirely invisible until you hold rank 2 with that guild. Uniques —
+   no r_ variants by design (declared after the reinforce and hearty loops). ---- */
+ITEMS.deepsteel_maul   = {n:'Deepsteel maul',     i:'🔨', v:56000};
+ITEMS.tidewright_feast = {n:"Tidewright's feast", i:'🦞', v:1200};
+ITEMS.gildweave_mantle = {n:'Gildweave mantle',   i:'🧥', v:52000};
+ITEMS.gilded_loupe     = {n:'Gilded loupe',       i:'🔍', v:30000};
+ITEMS.verdant_sickle   = {n:'Verdant sickle',     i:'🌿', v:0};
+ITEMS.emberbrand       = {n:'The Emberbrand',     i:'🔥', v:60000};
+FOOD.tidewright_feast = 42;
+SMITHS.push({id:'deepsteel_maul',   lvl:52, xp:1400, inp:{rune_bar:6, golem_core:2}, time:8.0, g:'deep'});
+COOKS.push({id:'tidewright_feast',  lvl:52, xp:620,  inp:{raw_shark:2, raw_gloomcarp:1}, stop:62, time:5.0, g:'tide'});
+TAILOR.push({id:'gildweave_mantle', lvl:54, xp:1500, inp:{cloudflax:6, gold_bar:2, glim_essence:3}, time:8.0, g:'gild'});
+CRAFTS.push({id:'gilded_loupe',     lvl:52, xp:1000, inp:{gold_bar:2, diamond:1, arcane_dust:5}, time:7.0, g:'gild'});
+EQUIP.deepsteel_maul   = {slot:'weapon', pow:66, cls:'melee', req:52, reqSkill:'attack',  tier:6, bonuses:[{hook:'dmg',v:8},{hook:'def',v:4}]};
+EQUIP.gildweave_mantle = {slot:'body',   pow:40, cls:'any',   req:52, reqSkill:'defence', tier:6, bonuses:[{hook:'abilitypow',v:8},{hook:'allxp',v:5}]};
+EQUIP.gilded_loupe     = {slot:'tool',   pow:0,  cls:'any',   req:50, reqSkill:'crafting', tier:6, tool:true, bonuses:[{hook:'rare',v:6}]};
+EQUIP.verdant_sickle   = {slot:'tool',   pow:0,  cls:'any',   req:50, reqSkill:'woodcutting', tier:6, tool:true, bonuses:[{hook:'yield',v:6}], speedNote:'20% faster woodcutting while in the tool slot'};
+EQUIP.emberbrand       = {slot:'weapon', pow:70, cls:'any',   req:50, reqSkill:'attack',  tier:6, bonuses:[{hook:'dmg',v:6},{hook:'crit',v:5}]};
 /* ---- pets: 1/1000 from any action, unique per source ---- */
 const PETS = [
   {id:'pet_squirrel',  n:'Acorn the Squirrel',      i:'🐿️', src:'woodcutting'},
@@ -1532,6 +1566,11 @@ const PETS = [
   {id:'pet_wyrmling',  n:'Rax the Wyrmling',          i:'🐲', src:'boss_skyfather'},
   {id:'pet_mole',      n:'Turnip the Mole',           i:'🦔', src:'farming'},
   {id:'pet_loom',      n:'Loomling the Grave Weaver', i:'🕸️', src:'anykill'},
+  {id:'pet_sprig',     n:'Sprig the Seedling',        i:'🌱', src:'quest_guild'},
+  {id:'pet_karst',     n:'Karst the Cave Wyrmlet',    i:'🪨', src:'quest_guild'},
+  {id:'pet_brine',     n:'Brine the Sea Sprite',      i:'🫧', src:'quest_guild'},
+  {id:'pet_filigree',  n:'Filigree the Clockmouse',   i:'⚙️', src:'quest_guild'},
+  {id:'pet_pyre',      n:'Pyre the Ashhound',         i:'🐕‍🦺', src:'quest_guild'},
 ];
 for (const p of PETS){
   ITEMS[p.id] = {n:p.n, i:p.i, v:0};
@@ -1543,6 +1582,12 @@ EQUIP.pet_mabel.bonus    = {hook:'crit',   v:5};
 EQUIP.pet_barnacle.bonus = {hook:'gold',   v:10};
 EQUIP.pet_fern.bonus     = {hook:'maxhp',  v:6};
 EQUIP.pet_grit.bonus     = {hook:'def',    v:6};
+/* the guild capstone companions */
+EQUIP.pet_sprig.bonuses    = [{hook:'yield',v:5},{hook:'allxp',v:4}];
+EQUIP.pet_karst.bonuses    = [{hook:'rare',v:5},{hook:'def',v:4}];
+EQUIP.pet_brine.bonuses    = [{hook:'foodheal',v:15},{hook:'gold',v:8}];
+EQUIP.pet_filigree.bonuses = [{hook:'rare',v:5},{hook:'abilitypow',v:5}];
+EQUIP.pet_pyre.bonuses     = [{hook:'dmg',v:8},{hook:'crit',v:4}];
 EQUIP.pet_scorch.bonus   = {hook:'dmg',    v:8};
 EQUIP.pet_squall.bonus   = {hook:'acc',    v:6};
 EQUIP.pet_lamplight.bonus= {hook:'allxp',  v:4};
@@ -1573,6 +1618,41 @@ function rollPetDrop(src){
   toast(`🐾 ${pet.n}!!`);
   celebrateLevel(); celebrateLevel();
   renderInv();
+}
+
+/* ---- mounts: super-rare rideable drops. Speed and prestige — pets keep the stats.
+   Each comes from one kind of work; the Emberwyrm can come off any monster at all. ---- */
+const MOUNTS = [
+  {id:'mount_charger',  n:'Dusk Charger',      i:'🐎', src:'m_duskkill', bonuses:[{hook:'dmg',v:2}],  how:'any kill in Duskrock Peaks might call him down from the switchbacks'},
+  {id:'mount_tortoise', n:'Mossback Tortoise', i:'🐢', src:'m_grow',     bonuses:[{hook:'yield',v:3}], how:'patience rewarded — woodcutting or farming'},
+  {id:'mount_seahorse', n:'Tidal Seahorse',    i:'🌊', src:'m_fish',     bonuses:[{hook:'gold',v:3}],  how:'comes up on the line — fishing (yes, it hovers on land; it knows what it is doing)'},
+  {id:'mount_ramble',   n:'Ramble the Warhog', i:'🐗', src:'m_forge',    bonuses:[{hook:'def',v:2}],   how:'fond of the din — mining or smithing'},
+  {id:'mount_wyrm',     n:'Emberwyrm',         i:'🐉', src:'m_anykill',  bonuses:[{hook:'dmg',v:2},{hook:'crit',v:2}], how:'ANY monster in the realm, anywhere — the rarest thing there is'},
+];
+for (const m of MOUNTS){
+  ITEMS[m.id] = {n:m.n, i:m.i, v:0};
+  EQUIP[m.id] = {slot:'mount', pow:0, cls:'any', req:1, reqSkill:'attack', tier:0, mount:true, bonuses:m.bonuses};
+}
+const MOUNT_BY_SRC = Object.fromEntries(MOUNTS.map(m => [m.src, m]));
+const MOUNT_CHANCE = 1/5000;      /* the four working mounts */
+const WYRM_CHANCE  = 1/10000;     /* the Emberwyrm, from any kill */
+const MOUNT_SPEED  = 0.77;        /* mounted overworld steps take 77% of the time ≈ +30% speed */
+const MOUNT_SKILL  = {woodcutting:'m_grow', farming:'m_grow', fishing:'m_fish', mining:'m_forge', smithing:'m_forge'};
+function hasMount(id){ return (P().inv[id]||0) > 0 || P().gear.mount === id || (P().bank && (P().bank[id]||0) > 0); }
+function rollMountDrop(src){
+  const m = MOUNT_BY_SRC[src];
+  if (!m || hasMount(m.id)) return;
+  if (Math.random() >= (src === 'm_anykill' ? WYRM_CHANCE : MOUNT_CHANCE)) return;
+  addItem(m.id);
+  log(`${m.i} <span class="lvl">SUPER RARE!! ${m.n} slows to a walk beside you… and lets you climb on.</span> Equip it in the 🛡️ Gear tab to ride — you'll cross the overworld far faster.`);
+  toast(`${m.i} ${m.n}!!!`);
+  celebrateLevel(); celebrateLevel(); celebrateLevel();
+  renderInv();
+}
+function rollMountFromSkill(sk){ const s = MOUNT_SKILL[sk]; if (s) rollMountDrop(s); }
+function rollMountFromKill(){
+  rollMountDrop('m_anykill');
+  if (plane === 'over' && regionOf(P().mapX, P().mapY) === 'peak') rollMountDrop('m_duskkill');
 }
 
 /* ---- monsters ---- */
@@ -1608,6 +1688,11 @@ const MONSTERS = [
   {id:'crow',   n:'Gallows Crow',   i:'🐦‍⬛',hp:82, atk:45,def:37,mh:12,gold:[70,150],  loot:[['sky_feather',.2],['grave_dust',.15]],lvl:24,tier:2},
   {id:'jack',   n:"Jack-o'-Lantern",i:'🎃', hp:100,atk:52,def:45,mh:14,gold:[90,190],  loot:[['ember_gourd',.32],['blossom_logs',.1]],lvl:26,tier:2,den:'The Rotting Patch'},
   {id:'widow',  n:'Gravewidow',     i:'🕷️',hp:118,atk:57,def:50,mh:16,gold:[110,230], loot:[['grave_silk',.3],['uncut_emerald',.05]],lvl:29,tier:2,den:'The Silken Barrow'},
+  /* the Brood Hollow — Hallowmere's silk mine (v67): every one of them pays in thread */
+  {id:'broodling',  n:'Broodling',        i:'🕷️',hp:100,atk:52,def:44,mh:14,gold:[80,180],  loot:[['grave_silk',.5]],lvl:27,tier:2},
+  {id:'silkspinner',n:'Silk Spinner',     i:'🕷️',hp:150,atk:62,def:54,mh:18,gold:[140,280], loot:[['grave_silk',.65],['uncut_emerald',.06]],lvl:30,tier:3},
+  {id:'palewidow',  n:'Pale Widow',       i:'🕷️',hp:200,atk:74,def:64,mh:22,gold:[240,460], loot:[['grave_silk',.8],['uncut_ruby',.06]],lvl:32,tier:3},
+  {id:'broodmother',n:'The Broodmother',  i:'🕸️',hp:380,atk:86,def:76,mh:26,gold:[1300,2500],loot:[['grave_silk',1],['goldspun_thread',.25],['uncut_ruby',.3]],lvl:34,tier:5,boss:true},
   {id:'vampire',n:'Pale Vampire',   i:'🧛', hp:142,atk:64,def:58,mh:18,gold:[170,340], loot:[['grave_dust',.3],['uncut_ruby',.06]],lvl:33,tier:3,den:'Hollowmere Crypt'},
   {id:'hangman',    n:'The Hanged Man',  i:'🪢', hp:190,atk:74,def:64,mh:22,gold:[300,600], loot:[['grave_dust',.6],['doubloon',.3],['uncut_ruby',.1]],lvl:33,tier:3},
   {id:'hollowman',  n:'The Hollow Man',   i:'🕴️',hp:250,atk:82,def:72,mh:25,gold:[500,1000],loot:[['grave_dust',.8],['grave_silk',.6],['uncut_diamond',.12]],lvl:35,tier:4},
@@ -1712,7 +1797,7 @@ const GATHER_BY_KIND = {woods:'TREES', mine:'ROCKS', river:'SPOTS'};
 let worldSeeded = false;
 function blockedAtStatic(x,y){ const k = x+','+y;
   return isMazeWall(x,y) || isMaze2Wall(x,y) || isWall(x,y) || isSolidBuild(x,y)
-      || GRAVE_SET.has(k) || PATCH_SET.has(k) || HALLOW_RESERVED.has(k)
+      || GRAVE_SET.has(k) || PATCH_SET.has(k) || HALLOW_RESERVED.has(k) || !!GUILD_BY_TILE[k]
       || LOST_LANTERNS.some(l => l.x===x && l.y===y); }
 /* what belongs where — anything that does not fit gets quietly retyped */
 const REGION_FLORA = {
@@ -1913,6 +1998,11 @@ const LOCATIONS = [
   {id:'sil', n:'🔭 The Orrery Archive', kind:'sil', desc:'Archivist Sil, a desk in open air, and a ledger with five blank entries.'},
   {id:'q_hush', n:'👤 The Quiet Man', kind:'hush', desc:'He has been sitting here so long he has stopped counting in years.'},
   {id:'hesk', n:'🏹 Warden Hesk', kind:'hesk', desc:'A woman with a list of three names and a great deal of patience.'},
+  {id:'guild_verdant', n:'🌿 The Verdant Circle', kind:'guild', gid:'verdant', desc:'A hall grown rather than built.'},
+  {id:'guild_deep', n:'⛏️ The Deepdelve Union', kind:'guild', gid:'deep', desc:'A hall cut into the mountain\'s own seam.'},
+  {id:'guild_tide', n:"🐚 The Tidewrights' Haven", kind:'guild', gid:'tide', desc:'A sea cave hung with nets and copper pans.'},
+  {id:'guild_gild', n:'🕯️ The Gilded Hand', kind:'guild', gid:'gild', desc:'A cellar atelier lit by a hundred candles.'},
+  {id:'guild_vanguard', n:'🛡️ The Ember Vanguard', kind:'guild', gid:'vanguard', desc:'A war-hall behind a basalt door.'},
   {id:'fair', n:'🎡 The Wandering Fair', kind:'fair', desc:'Six wagons, a striped awning, and every game rigged in the open.'},
   {id:'rift', n:'\u{1F300} The Rift Below', kind:'rift', desc:'A ladder of light, going down.'},
   {id:'sage', n:'\u{1F52E} Curator Vell', kind:'sage', desc:'The keeper of the ladder.'},
@@ -1951,6 +2041,36 @@ const LOCATIONS = [
         ['uncut_sapphire',2,5,.7],['uncut_emerald',1,4,.5],['uncut_ruby',1,3,.35],['uncut_diamond',1,2,.18],
         ['sapphire',1,2,.4],['emerald',1,2,.3],['ruby',1,1,.22],['diamond',1,1,.12],
         ['sapphire_ring',1,1,.3],['ruby_amulet',1,1,.18]]},
+    ]},
+  {id:'petalmarket', n:'🏘️ Petalmarket', kind:'city',
+    desc:'A Vale market town strung with petals and bunting — half the stalls sell things that are technically still growing. Vendors restock every hour.',
+    vendors:[
+      {id:'petalstall', n:'The Petal Stall', i:'🌸', pool:[
+        ['blossom_logs',6,14,1],['thorn_barb',6,14,.9],['glimmer_dust',4,10,.8],
+        ['wool',10,22,1],['flax',10,22,1],['herb_dewleaf',3,8,.7],['herb_mossbell',2,6,.5],['uncut_emerald',1,3,.4]]},
+      {id:'seedcart', n:'The Seed Cart', i:'🌱', pool:[
+        ['potato',8,18,1],['onion',8,16,1],['cabbage',6,14,.9],['tomato',5,12,.8],
+        ['sweetcorn',4,10,.7],['strawberry',3,8,.6],['moonmelon',1,3,.3]]},
+    ]},
+  {id:'rimeholt', n:'🏘️ Rimeholt', kind:'city',
+    desc:'A palisade town on the Frostpine treeline — smoke, sawdust, and everyone dressed like the weather owes them money. Vendors restock every hour.',
+    vendors:[
+      {id:'coldforge', n:'The Cold Forge', i:'❄️', pool:[
+        ['coal',10,26,1],['iron_ore',8,18,1],['pine_logs',8,18,1],['rime_shard',2,6,.6],
+        ['steel_bar',2,6,.6],['mithril_ore',2,5,.4],['mithril_bar',1,3,.25]]},
+      {id:'wintertable', n:'The Winter Table', i:'🍲', pool:[
+        ['salmon',6,14,1],['trout',8,16,1],['pot_warm',1,3,.5],
+        ['mammoth_pelt',1,4,.5],['troll_tusk',1,4,.5],['wendigo_horn',1,2,.2]]},
+    ]},
+  {id:'duskmarket', n:'🏘️ Duskmarket', kind:'city',
+    desc:'A miners\' exchange bolted to the Duskrock switchbacks — ore by the sack, gems by the pinch, and no credit. Vendors restock every hour.',
+    vendors:[
+      {id:'orebroker', n:'The Ore Broker', i:'⛏️', pool:[
+        ['coal',10,26,1],['mithril_ore',3,8,.8],['adamantite_ore',2,5,.5],['runite_ore',1,2,.22],
+        ['golem_core',1,2,.3],['iron_bar',3,8,.7],['steel_bar',2,6,.6]]},
+      {id:'stonecutter', n:'The Stonecutter', i:'💎', pool:[
+        ['uncut_sapphire',2,5,.8],['uncut_emerald',1,4,.6],['uncut_ruby',1,3,.4],['uncut_diamond',1,2,.2],
+        ['silver_bar',2,6,.7],['gold_bar',2,5,.5],['sapphire',1,2,.35],['ruby',1,1,.2]]},
     ]},
   {id:'caravan', n:"🐴 Carla's Caravan", kind:'caravan',
     desc:'A cheerful trader and her patient old horse, working the kingdom\'s roads. Fair prices, honest goods — find her somewhere along the highway; she moves on every hour.'},
@@ -2141,9 +2261,9 @@ function manorValue(){
 function newPlayer(name){
   const xp = {}; SKILLS.forEach(s => xp[s.id] = s.id==='hitpoints' ? 388 : 0);
   return {name, xp, inv:{}, bank:{}, gold:25, class:null, hp:10, jobs:{}, buffs:{}, mapX:56, mapY:44,
-          gear:{weapon:null, helm:null, body:null, legs:null, pet:null, tool:null}, talents:{0:{},1:{}}, kills:{}, raids:{},
+          gear:{weapon:null, helm:null, body:null, legs:null, pet:null, tool:null, mount:null}, talents:{0:{},1:{}}, kills:{}, raids:{},
           eggsFound:{}, eggsReturned:0, mermaidMet:false, finnickDone:false, faeDone:false, bramDone:{},
-          lanterns:{}, chain:0, dugCount:0, rainbowFound:{},
+          lanterns:{}, chain:0, dugCount:0, rainbowFound:{}, buyback:[],
           house:{rooms:{4:'hall'}, furn:{}, pets:[], garden:null, restedUntil:0, butlerAt:0}};
 }
 function migratePlayer(p, name){
@@ -2162,16 +2282,20 @@ function migratePlayer(p, name){
   }
   if (p.gear && p.gear.pet === undefined) p.gear.pet = null;
   if (p.gear && p.gear.tool === undefined) p.gear.tool = null;
+  if (p.gear && p.gear.mount === undefined) p.gear.mount = null;
   if (!p.lanterns) p.lanterns = {};
   if (typeof p.chain !== 'number') p.chain = 0;
   if (typeof p.dugCount !== 'number') p.dugCount = 0;
   if (!p.rainbowFound) p.rainbowFound = {};
+  if (!Array.isArray(p.buyback)) p.buyback = [];
   if (!p.house) p.house = {rooms:{4:'hall'}, furn:{}, garden:null, restedUntil:0, butlerAt:0};
   if (!p.house.rooms || !p.house.rooms[4]) p.house.rooms = Object.assign({4:'hall'}, p.house.rooms||{});
   p.house.furn = p.house.furn || {};
   p.house.pets = p.house.pets || [];
   if (!p.house.farm) p.house.farm = {plots:[]};
   p.ench = p.ench || {};
+  p.guilds = p.guilds || {};
+  p.tracked = p.tracked || {};
   delete p.house.garden;   /* the old single-crop garden gave way to farming plots */
   p.buffs = p.buffs || {};
   /* old flat talent format (pre-specialization) → reset into two route buckets */
@@ -2384,6 +2508,7 @@ function renderLocation(){
   if (loc.kind === 'sil'){ renderSil(grid); return; }
   if (loc.kind === 'hush'){ renderHush(grid); return; }
   if (loc.kind === 'hesk'){ renderHesk(grid); return; }
+  if (loc.kind === 'guild'){ renderGuild(grid, GUILDS.find(g => g.id === loc.gid)); return; }
   if (loc.kind === 'fair'){ renderFair(grid); return; }
   if (loc.kind === 'rift'){ renderRift(grid); return; }
   if (loc.kind === 'sage'){ renderSage(grid); return; }
@@ -2395,6 +2520,7 @@ function renderLocation(){
   const onlyMakeable = hasRecipes ? craftFilterBox(grid) : false;
   let hiddenN = 0;
   for (const e of loc.data){
+    if (recipeGuildLocked(e)) continue;          /* guild secrets stay invisible below rank 2 */
     const locked = lvl < e.lvl;
     if (onlyMakeable && e.inp && (locked || !haveMats(e.inp))){ hiddenN++; continue; }
     const div = document.createElement('div');
@@ -2936,6 +3062,7 @@ function farmHarvest(slot){
   for (const [k,n] of Object.entries(c.out)){ const q = Math.max(1, Math.round(n*mult)); gain(k, q); msg.push(`${q}× ${ITEMS[k].n}`); }
   grantXp('farming', c.xp);
   rollPetDrop('farming');
+  rollMountFromSkill('farming');
   f.plots[slot] = null;
   log(`🧺 <span class="lvl">You bring in the harvest:</span> <span class="good">${msg.join(', ')}</span>`);
   toast('🧺 Harvested!'); renderInv(); renderLocation();
@@ -3735,7 +3862,8 @@ function renderSage(grid){
     '"It sends things up. You put them down. Every tenth one, the rift decides you have earned something and drops a <b>token</b> — that is the whole economy down here, and I am the whole market." ' +
     '<br><br>"The rules, since nobody else will tell you: <b>each wave is harder than the last</b>, forever. <b>Every fifth is elite; every tenth is a Rift-Warden and pays out.</b> ' +
     'You may climb out between waves and keep everything. If you fall, the run ends and the depth resets — but your tokens stay yours. I am not a thief." ' +
-    '<br>"Bring me tokens. I will make it worth the climbing."';
+    '<br>"Bring me tokens. I will make it worth the climbing."' +
+    '<br><br>"One more thing, since you look the type: <b>fifty waves down</b>, the Rift stops testing you and starts teaching. There is a crack in your Class Hall floor that has been waiting for someone it recognises. 🌀 <b>The Riftwalker</b> — that is the deepest prize I know of, and I keep inventory."';
   grid.appendChild(d);
   for (const it of RIFT_SHOP){
     const afford = tok >= it.cost;
@@ -4216,6 +4344,228 @@ function lightTwin(which){
    a very long time, each with a habit you learn the hard way.
 ===================================================================== */
 const WANDER_COOLDOWN_MIN = 20;
+/* =====================================================================
+   THE FIVE SECRET GUILDS — hidden halls for the realm's masters.
+   No map marker, no signpost: you find the door, and it only opens for
+   level 50 in one of the guild's arts. Inside, three commissions each,
+   paying a permanent boon, a guild secret, and a companion.
+===================================================================== */
+const GUILDS = [
+  {id:'verdant', n:'The Verdant Circle', i:'🌿', x:42, y:63, region:'blossom',
+   where:'a living door in Blossom Vale', skills:['woodcutting','farming'],
+   desc:'A hall grown rather than built — living branches for rafters, and a floor that is quietly, politely, a lawn.',
+   found:'Behind the ivy: a hall grown from living wood, and gardeners who bow without irony.',
+   lockText:'The bark shows a faint carved leaf. It does not open — the Circle admits only masters (level 50 woodcutting or farming).',
+   boons:["Rank 1 — Verdant Touch: +12% chance to double everything you gather, and 10% faster woodcutting",
+          'Rank 2 — the Verdant sickle: a guild tool (20% faster woodcutting, +6% double harvest)',
+          'Rank 3 — Sprig the Seedling, the Circle\'s own companion']},
+  {id:'deep', n:'The Deepdelve Union', i:'⛏️', x:114, y:18, region:'peak',
+   where:'a cleft in the Duskrock peaks', skills:['mining','smithing'],
+   desc:'A hall cut into the mountain\'s own seam — anvils older than the castle, and a ceiling of raw ore.',
+   found:'The cleft opens into a hall of anvils and ore-light. The Union looks up, nods once, and keeps hammering.',
+   lockText:'A hairline seam in the rock, hammer-marked. It stays shut — the Union admits only masters (level 50 mining or smithing).',
+   boons:['Rank 1 — Union Standard: 10% faster mining and smithing, everywhere',
+          'Rank 2 — the Deepsteel schematic: forge the Deepsteel maul (smithing 52, guild-only)',
+          'Rank 3 — Karst the Cave Wyrmlet, hatched in the ore-light']},
+  {id:'tide', n:"The Tidewrights' Haven", i:'🐚', x:70, y:98, region:'coast',
+   where:'a shell-marked cave on the Tidewatch shore', skills:['fishing','cooking'],
+   desc:'A sea cave hung with nets and copper pans, where the tide comes in as a guest and leaves as an ingredient.',
+   found:'Past the shell-marked stone: firepits, nets, and cooks arguing about salt. The Haven takes you in.',
+   lockText:'A whorl of shells pressed into the rock. The stone holds fast — the Haven admits only masters (level 50 fishing or cooking).',
+   boons:['Rank 1 — Haven\'s Craft: 10% faster fishing and cooking, everywhere',
+          "Rank 2 — the Feast recipe: cook the Tidewright's feast (cooking 52, guild-only, heals 42)",
+          'Rank 3 — Brine the Sea Sprite, out of the rockpools']},
+  {id:'gild', n:'The Gilded Hand', i:'🕯️', x:28, y:80, region:'gloom',
+   where:'a candlelit cellar under Hallowmere', skills:['crafting','tailoring','enchanting','construction'],
+   desc:'A cellar atelier lit by a hundred candles — looms, lathes, jeweller\'s benches, and no dust anywhere.',
+   found:'A trapdoor, a stair, a hundred candles: the Gilded Hand, at work under the wood the whole time.',
+   lockText:'A brass ring set flush in the earth, worked with a tiny open hand. It will not lift — the Hand admits only masters (level 50 crafting, tailoring, enchanting or construction).',
+   boons:['Rank 1 — Gilded Method: 10% faster crafting and tailoring, everywhere',
+          'Rank 2 — the guild patterns: the Gildweave mantle (tailoring 54) and the Gilded loupe (crafting 52)',
+          'Rank 3 — Filigree the Clockmouse, wound every morning']},
+  {id:'vanguard', n:'The Ember Vanguard', i:'🛡️', x:134, y:30, region:'peak', combat:true,
+   where:'a scorched war-door above the Ashlands', skills:[],
+   desc:'A war-hall behind a basalt door — trophy racks, a cold firepit that lights itself when you enter, and veterans of everything.',
+   found:'The basalt door grinds back on a hall of trophies. The Vanguard measures you, and approves.',
+   lockText:'A shield-mark scorched into basalt. The door does not move — the Vanguard admits only proven fighters (combat level 50).',
+   boons:['Rank 1 — Vanguard Drill: +4% damage and +5% defence, permanently',
+          'Rank 2 — the Emberbrand: the Vanguard\'s own blade, any calling (power 70)',
+          'Rank 3 — Pyre the Ashhound, who has opinions about your enemies']},
+];
+const GUILD_BY_TILE = {}; for (const G of GUILDS) GUILD_BY_TILE[G.x+','+G.y] = G;
+function guildStage(id){ const p = activeId ? P() : null; return p && p.guilds ? (p.guilds[id]||0) : 0; }
+function guildAccess(G){
+  const p = P();
+  if (G.combat) return combatLevelOf(p) >= 50;
+  return G.skills.some(s => levelFor(p.xp[s]) >= 50);
+}
+/* rank-1 boons: speed — wired into BOTH procTime and stationTime */
+const GUILD_SPEED = {mining:'deep', smithing:'deep', fishing:'tide', cooking:'tide',
+                     crafting:'gild', tailoring:'gild', woodcutting:'verdant'};
+function guildSpeedMult(sk){
+  if (!activeId) return 1;
+  let m = 1;
+  if (GUILD_SPEED[sk] && guildStage(GUILD_SPEED[sk]) >= 1) m *= 0.9;
+  if (sk === 'woodcutting' && P().gear && P().gear.tool === 'verdant_sickle') m *= 0.8;
+  return m;
+}
+/* rank-1 boons: stats — summed into statVal */
+function guildBonusVal(hook){
+  if (!activeId) return 0;
+  let v = 0;
+  if (guildStage('verdant') >= 1 && hook === 'yield') v += 12;
+  if (guildStage('vanguard') >= 1){ if (hook === 'dmg') v += 4; if (hook === 'def') v += 5; }
+  return v;
+}
+/* guild-secret recipes (g:'<id>') are invisible below rank 2 */
+function recipeGuildLocked(e){ return !!(e && e.g && guildStage(e.g) < 2); }
+/* stage builders */
+function gNeedStage(n, ask, need, xps, gold, give, extra){
+  return {n, ask, need,
+    check: p => haveInputs(need),
+    prog: p => Object.entries(need).map(([k,q]) => `${Math.min(p.inv[k]||0,q)}/${q} ${ITEMS[k].n}`).join(' · '),
+    reward: p => {
+      for (const [k,q] of Object.entries(need)){ p.inv[k] -= q; if (p.inv[k] <= 0) delete p.inv[k]; }
+      if (gold) gainGold(gold);
+      for (const [sk,q] of Object.entries(xps||{})) grantXp(sk, q);
+      if (give) addItem(give);
+      return extra;
+    }};
+}
+function gKillStage(n, ask, kills, xps, gold, give, extra){
+  return {n, ask, kills,
+    check: p => Object.entries(kills).every(([id,q]) => (p.kills[id]||0) >= q),
+    prog: p => Object.entries(kills).map(([id,q]) => `${Math.min(p.kills[id]||0,q)}/${q} ${(MONSTERS.find(m=>m.id===id)||{n:id}).n}`).join(' · '),
+    reward: p => {
+      if (gold) gainGold(gold);
+      for (const [sk,q] of Object.entries(xps||{})) grantXp(sk, q);
+      if (give) addItem(give);
+      return extra;
+    }};
+}
+const GUILD_CHAINS = {
+  verdant: [
+    gNeedStage('Proof of the Bough', '"Thirty elder logs and eight moonmelons — grown, not bought, though we have no way to check and enormous faith in you."',
+      {elder_logs:30, moonmelon:8}, {woodcutting:2600, farming:2600}, 8000, null,
+      'Rank 1 — the Verdant Touch is yours: +12% chance to double everything you gather, and woodcutting runs 10% faster.'),
+    gNeedStage('The Star Orchard', '"Fifteen starbloom logs from above the sky, and four starfruit from under it. The Circle plants both and refuses to explain."',
+      {starbloom_logs:15, starfruit:4}, {woodcutting:4200, farming:4200}, 15000, 'verdant_sickle',
+      'Rank 2 — the Verdant sickle: 20% faster woodcutting and +6% double harvest while it rides your tool slot.'),
+    gNeedStage('The Old Growth', '"Six starfruit and twelve emberleaf. The last favour is always a garden."',
+      {starfruit:6, herb_emberleaf:12}, {woodcutting:7500, farming:7500}, 30000, 'pet_sprig',
+      'Rank 3 — Sprig the Seedling toddles out of the seed-bed and adopts you.'),
+  ],
+  deep: [
+    gNeedStage('Bar Stock', '"Twelve adamant bars and thirty coal. The Union burns through both like gossip."',
+      {adamant_bar:12, coal:30}, {mining:2600, smithing:2600}, 8000, null,
+      'Rank 1 — the Union Standard is yours: mining and smithing run 10% faster, everywhere, forever.'),
+    gNeedStage('Heart of the Mountain', '"Eight rune bars and three golem cores. What we are building wants a pulse."',
+      {rune_bar:8, golem_core:3}, {mining:4200, smithing:4200}, 15000, null,
+      'Rank 2 — the Deepsteel schematic is unlocked: forge the Deepsteel maul at any forge (smithing 52).'),
+    gNeedStage('The Deep Seam', '"Four aetherite bars and twenty mithril. Then the seam is yours as much as ours."',
+      {aetherite_bar:4, mithril_bar:20}, {mining:7500, smithing:7500}, 30000, 'pet_karst',
+      'Rank 3 — Karst the Cave Wyrmlet uncoils from the ore-light and follows you out.'),
+  ],
+  tide: [
+    gNeedStage('The Long Table', '"Twenty swordfish and eight shark, cooked so they would forgive you. The Haven feeds every wreck survivor on this coast."',
+      {swordfish:20, shark:8}, {fishing:2600, cooking:2600}, 8000, null,
+      "Rank 1 — the Haven's Craft is yours: fishing and cooking run 10% faster, everywhere, forever."),
+    gNeedStage('Dark Water', '"Eight gloomcarp out of the marsh and eight raw moonfish out of Toby\'s river. The recipe wants what the light never touches."',
+      {gloomcarp:8, raw_moonfish:8}, {fishing:4200, cooking:4200}, 15000, null,
+      "Rank 2 — the Feast recipe is unlocked: cook the Tidewright's feast at any hearth (cooking 52, heals 42)."),
+    gNeedStage('The Salt Blessing', '"Twenty shark and ten gloomcarp for the blessing of the nets. Everyone eats, including you."',
+      {shark:20, gloomcarp:10}, {fishing:7500, cooking:7500}, 30000, 'pet_brine',
+      'Rank 3 — Brine the Sea Sprite climbs out of a rockpool, entirely uninvited, entirely yours.'),
+  ],
+  gild: [
+    gNeedStage('The Apprentice Piece', '"Two silk robes, two runeweave robes, and ten arcane dust. We unpick them, you understand. That is the lesson."',
+      {silk_robe:2, rune_robe:2, arcane_dust:10}, {crafting:2000, tailoring:2000, enchanting:2000}, 8000, null,
+      'Rank 1 — the Gilded Method is yours: crafting and tailoring run 10% faster, everywhere, forever.'),
+    gNeedStage('The Journeyman Piece', '"One cloudweave robe and six glimmering essence. Now we unpick THAT."',
+      {cloud_robe:1, glim_essence:6}, {crafting:3400, tailoring:3400, enchanting:3400}, 15000, null,
+      'Rank 2 — the guild patterns are unlocked: the Gildweave mantle (loom, tailoring 54) and the Gilded loupe (workshop, crafting 52).'),
+    gNeedStage('The Masterpiece', '"A starbloom staff and two cut diamonds. This one we keep, and we hang it where the candles are best."',
+      {starbloom_staff:1, diamond:2}, {crafting:6000, tailoring:6000, enchanting:6000}, 30000, 'pet_filigree',
+      'Rank 3 — Filigree the Clockmouse is wound, set ticking, and handed over with great ceremony.'),
+  ],
+  vanguard: [
+    gKillStage('The Proving', '"Twenty-five golems, broken. The mountain keeps count and so do we."',
+      {golem:25}, {strength:3000, defence:3000}, 8000, null,
+      'Rank 1 — the Vanguard Drill is in your bones: +4% damage and +5% defence, permanently.'),
+    gKillStage('The Long Watch', '"Fifteen void wraiths and ten rime hags. The realm\'s bad dreams, put back to bed."',
+      {wraith:15, rimehag:10}, {attack:4000, hitpoints:4000}, 15000, 'emberbrand',
+      'Rank 2 — the Emberbrand is drawn from the cold firepit, still warm, and given to you.'),
+    gNeedStage('Trophies of the Three', '"A horn from the Aurochs, a mask from the Choir, a crown from the Tide. Bring the wanderers\' trophies and hang them here."',
+      {aurochs_horn:1, choir_mask:1, tide_crown:1}, {strength:6000, defence:6000}, 30000, 'pet_pyre',
+      'Rank 3 — Pyre the Ashhound leaves the hearth he has guarded for years, because you are more interesting.'),
+  ],
+};
+function openGuild(G){
+  const p = P();
+  if (!guildAccess(G)){
+    toast(`${G.i} A hidden door — it will not open for you yet.`);
+    log(`${G.i} <span style="color:#e8c97a">A hidden door.</span> ${G.lockText}`);
+    return;
+  }
+  p.guilds = p.guilds || {};
+  if (p.guilds[G.id] === undefined){
+    p.guilds[G.id] = 0;
+    log(`${G.i} <span class="lvl">You have found ${G.n}!</span> ${G.found}`);
+    toast(`${G.i} ${G.n} — discovered!`);
+  }
+  openOverlay('guild_' + G.id);
+}
+function renderGuild(grid, G){
+  const p = P(), ch = GUILD_CHAINS[G.id], st = guildStage(G.id);
+  /* rank banner */
+  const t = document.createElement('div');
+  t.className = 'tierLabel'; t.style.gridColumn = '1/-1';
+  t.innerHTML = `${G.i} <b style="color:var(--gold)">Guild rank ${st} of ${ch.length}</b>` +
+    (G.combat ? ' · a fighters\' guild' : ` · the guild of ${G.skills.map(s2=>SKILLS.find(k2=>k2.id===s2).n.toLowerCase()).join(', ')}`);
+  grid.appendChild(t);
+  /* boons list */
+  const bl = document.createElement('div');
+  bl.className = 'locDesc'; bl.style.gridColumn = '1/-1';
+  bl.innerHTML = G.boons.map((b,i) => `${st > i ? '✅' : '⬜'} ${b}`).join('<br>');
+  grid.appendChild(bl);
+  if (st >= ch.length){
+    const d = document.createElement('div'); d.className = 'locDesc'; d.style.gridColumn = '1/-1';
+    d.innerHTML = `<b style="color:var(--gold)">A master of the hall.</b> The guild\'s boons are yours for good, and there is always a chair by the fire with your name on it.`;
+    grid.appendChild(d);
+    return;
+  }
+  const q = ch[st];
+  const t2 = document.createElement('div');
+  t2.className = 'tierLabel'; t2.style.gridColumn = '1/-1';
+  t2.innerHTML = `✨ <b style="color:var(--gold)">${q.n}</b> — commission ${st+1} of ${ch.length}`;
+  grid.appendChild(t2);
+  const say = document.createElement('div');
+  say.className = 'locDesc'; say.style.gridColumn = '1/-1';
+  say.textContent = q.ask;
+  grid.appendChild(say);
+  const row = document.createElement('div');
+  row.className = 'shopRow'; row.style.gridColumn = '1/-1';
+  const ok = q.check(p);
+  row.innerHTML = `<span>${ok?'✅':'⬜'}</span><span class="sn"><b>${q.prog(p)}</b></span>`;
+  grid.appendChild(row);
+  if (ok){
+    const b = document.createElement('button');
+    b.className = 'btn'; b.style.gridColumn = '1/-1';
+    b.textContent = `${G.i} Present the commission`;
+    b.onclick = () => {
+      const msg = q.reward(p);
+      p.guilds[G.id] = st + 1;
+      log(`${G.i} <span class="lvl">${q.n} — complete.</span> <span class="good">${msg}</span>`);
+      questComplete(q.n, msg);
+      renderHeader(); renderInv(); renderLocation();
+    };
+    grid.appendChild(b);
+  }
+  const nxt = document.createElement('div');
+  nxt.className = 'locDesc'; nxt.style.gridColumn = '1/-1';
+  nxt.innerHTML = st < ch.length-1 ? `<span style="opacity:.6">Then: ${ch[st+1].n}</span>` : '<span style="opacity:.6">Then the hall is yours.</span>';
+  grid.appendChild(nxt);
+}
 const WANDERERS = [
   {id:'bellow',  x:45, y:35, n:'Bellow, the Last Aurochs', i:'\u{1F402}', lvl:42, drop:'aurochs_horn',
    lair:'A hoofprint in the meadow the size of a cartwheel, and a hollow in the grass where something enormous sleeps.',
@@ -5978,6 +6328,7 @@ function bankCatMap(){
   /* then anything wearable, by what it is worn as */
   for (const [k, e] of Object.entries(EQUIP)){
     if (e.pet) { m[k] = 'pet'; continue; }
+    if (e.mount){ m[k] = 'pet'; continue; }
     if (e.tool){ m[k] = 'tool'; continue; }
     m[k] = 'gear';
   }
@@ -6350,11 +6701,15 @@ function renderCity(grid, loc){
   }
 }
 
+const BUYBACK_MAX = 10;   /* the merchant keeps your last ten sold stacks on a shelf behind the counter */
 function renderShop(grid){
   const inv = P().inv;
+  renderBuyback(grid);
   const keys = Object.keys(inv).filter(k => inv[k] > 0 && !(EQUIP[k] && EQUIP[k].pet));   /* pets are priceless */
   if (!keys.length){
-    grid.innerHTML = '<div class="locDesc">Your pack is empty — nothing to sell. Go gather something!</div>';
+    const d = document.createElement('div'); d.className = 'locDesc'; d.style.gridColumn = '1/-1';
+    d.textContent = 'Your pack is empty — nothing to sell. Go gather something!';
+    grid.appendChild(d);
     return;
   }
   for (const k of keys){
@@ -6377,7 +6732,49 @@ function sellItem(k, qty){
   inv[k] -= qty; if (inv[k]===0) delete inv[k];
   const got = qty * ITEMS[k].v;
   P().gold += got;
-  log(`Sold ${qty}× ${ITEMS[k].n} for <span class="good">${got.toLocaleString()} gp</span>.`);
+  /* the merchant sets it on the buyback shelf — same price to take it back, no penalty */
+  const bb = P().buyback;
+  const ex = bb.find(e => e.id === k && e.gp === ITEMS[k].v);
+  if (ex) ex.qty += qty;
+  else { bb.unshift({id:k, qty, gp:ITEMS[k].v}); while (bb.length > BUYBACK_MAX) bb.pop(); }
+  log(`Sold ${qty}× ${ITEMS[k].n} for <span class="good">${got.toLocaleString()} gp</span>. <span style="opacity:.7">(Sold by accident? It's on the buyback shelf.)</span>`);
+  renderHeader(); renderInv(); renderLocation();
+}
+/* ---- buyback: undo an accidental sale at exactly the price you were paid ---- */
+function renderBuyback(grid){
+  const bb = P().buyback || [];
+  if (!bb.length) return;
+  const h = document.createElement('div');
+  h.className = 'tierLabel'; h.style.gridColumn = '1/-1';
+  h.innerHTML = `<b style="color:var(--gold)">↩️ Buyback</b> — "Sold something by accident? Take it back for what I paid you." (last ${BUYBACK_MAX} sales)`;
+  grid.appendChild(h);
+  for (const e of bb){
+    if (!ITEMS[e.id]) continue;
+    const row = document.createElement('div');
+    row.className = 'shopRow';
+    row.style.gridColumn = '1/-1';
+    row.innerHTML = `<span>${ITEMS[e.id].i}</span><span class="sn">${ITEMS[e.id].n} × ${e.qty}</span><span class="sv">${e.gp} gp</span>`;
+    const b1 = document.createElement('button'); b1.className='btn small'; b1.textContent='Buy back 1';
+    b1.onclick = () => buybackItem(e, 1);
+    const bAll = document.createElement('button'); bAll.className='btn small'; bAll.textContent='Buy back all';
+    bAll.onclick = () => buybackItem(e, e.qty);
+    row.appendChild(b1); row.appendChild(bAll);
+    grid.appendChild(row);
+  }
+}
+function buybackItem(e, qty){
+  const p = P();
+  qty = Math.min(qty, e.qty);
+  const cost = qty * e.gp;
+  const afford = Math.min(qty, Math.floor(p.gold / Math.max(1, e.gp)));
+  if (e.gp > 0 && afford <= 0){ toast('Not enough gold'); return; }
+  qty = e.gp > 0 ? Math.min(qty, afford) : qty;
+  p.gold -= qty * e.gp;
+  addItem(e.id, qty);
+  e.qty -= qty;
+  if (e.qty <= 0) p.buyback.splice(p.buyback.indexOf(e), 1);
+  log(`↩️ Bought back ${qty}× ${ITEMS[e.id].n} for <span class="bad">−${(qty*e.gp).toLocaleString()} gp</span>.`);
+  toast(`↩️ ${ITEMS[e.id].n} returned`);
   renderHeader(); renderInv(); renderLocation();
 }
 
@@ -6483,9 +6880,9 @@ function renderInv(){
   grid.innerHTML = '';
 
   if (invView === 'gear'){
-    const SLOT_ICON = {weapon:'🗡️', helm:'🪖', body:'🛡️', legs:'🦵', pet:'🐾', tool:'🎣'};
+    const SLOT_ICON = {weapon:'🗡️', helm:'🪖', body:'🛡️', legs:'🦵', pet:'🐾', tool:'🎣', mount:'🐎'};
     sectionLabel(grid, 'Equipped');
-    for (const s of ['weapon','helm','body','legs','pet','tool']){
+    for (const s of ['weapon','helm','body','legs','pet','tool','mount']){
       const id = P().gear[s];
       if (id) itemSlot(grid, id, null, `${ITEMS[id].n} (power ${EQUIP[id].pow}) — click to unequip`, () => unequipItem(s));
       else { const e = document.createElement('div'); e.className='slot'; e.innerHTML = `<span class="icon">${SLOT_ICON[s]}</span><span>${s}</span>`; grid.appendChild(e); }
@@ -6667,6 +7064,7 @@ function stationTime(skill, e){
     }
     const tr = TRINKET_BY_SKILL[skill];
     if (tr && (P().inv[tr]||0) > 0) t *= 0.95;
+    t *= guildSpeedMult(skill);                  /* the secret guilds' rank-1 boons */
   }
   return t;
 }
@@ -6683,6 +7081,7 @@ function depositStation(loc, e){
   const sid = loc.id, st = STATIONS[sid], p = P();
   p.jobs = p.jobs || {};
   if (p.jobs[sid]){ toast(st.busy); return; }
+  if (recipeGuildLocked(e)){ toast('🔒 A guild secret — you have not earned this recipe.'); return; }
   let n = STATION_MAX;
   for (const [k,q] of Object.entries(e.inp)) n = Math.min(n, Math.floor((p.inv[k]||0)/q));
   if (n < 1){ toast(`You need: ${fmtInputs(e.inp)}`); return; }
@@ -6710,6 +7109,7 @@ function collectStation(sid){
   const xp = made * (entry ? entry.xp : 0);
   if (xp > 0) grantXp(j.skill, xp);
   for (let i = 0; i < Math.min(made, 25); i++) rollPetDrop(j.skill);
+  for (let i = 0; i < Math.min(made, 25); i++) rollMountFromSkill(j.skill);
   for (let i = 0; i < Math.min(made, 25); i++) rollRainbow(j.skill);
   /* one in fifty leaves masterwork scrap behind — every craft, every tier */
   const scrap = CRAFT_RARE[j.skill];
@@ -6777,6 +7177,7 @@ function renderStation(grid, loc){
   const onlyMakeable = craftFilterBox(grid);
   let hidden = 0;
   for (const e of loc.data){
+    if (recipeGuildLocked(e)) continue;          /* guild secrets stay invisible below rank 2 */
     const locked = lvl < e.lvl;
     let n = STATION_MAX;
     for (const [k,q] of Object.entries(e.inp)) n = Math.min(n, Math.floor((p.inv[k]||0)/q));
@@ -6866,6 +7267,9 @@ function toggleAction(loc, e){
     toast(`🛸 The ${e.n.toLowerCase()} shrugs off realm-made tools — you need a ${tn}.`);
     log(`🛸 <span style="color:#9fe8d8">Whatever this is, your tools slide off it without leaving a mark. Curator Vell, by the rift ladder, sells a <b>${tn}</b> for rift tokens.</span>`);
     return;
+  }
+  if (loc.kind !== 'gather' && recipeGuildLocked(e)){
+    toast('🔒 A guild secret — you have not earned this recipe.'); return;
   }
   if (loc.kind !== 'gather' && !haveInputs(e.inp)){
     toast(`You need: ${fmtInputs(e.inp)}`); return;
@@ -7043,6 +7447,37 @@ CLASSES.stormsinger = {n:'Stormsinger', i:'\u{1F329}️', style:'ranged', locked
         {id:'lastsong', n:'The Last Song', i:'\u{1F3BA}', at:16, cd:13, d:'Full health, +60% damage for five rounds, and two rounds where nothing in the world can reach you.'},
       ]},
   ]};
+CLASSES.riftwalker = {n:'Riftwalker', i:'🌀', style:'melee', locked:'riftwalker',
+  flavor:'Fifty waves down, the Rift stops sending things up at you and starts asking where you learned to move like that.',
+  abilities:[
+    {id:'riftstrike', n:'Riftstrike', i:'🌀', cd:3, d:'340% damage, delivered from a direction that does not exist yet.'},
+    {id:'blinkstep',  n:'Blinkstep',  i:'💠', cd:7, d:'180% damage, and for two rounds you are simply somewhere else when the blow lands.'},
+    {id:'voidgrasp',  n:'Voidgrasp',  i:'🕳️', cd:6, d:'240% guaranteed damage, and the Verge keeps chewing for three rounds.'},
+  ],
+  branches:[
+    {id:'riftblade', n:'Riftblade', i:'🗡️', theme:'The shortest distance between two points is through.',
+      talents:[T('Edge of Elsewhere','dmg',5,2), T('Verge-Honed','crit',5,2),
+               T('Unerring Angle','acc',4,2), T('Walker\'s Vigor','maxhp',5,2),
+               T('Tollgate','gold',10,2), T('Between-Lessons','xpboost',6,2),
+               T('Severance','dmg',12,1), T('Perfect Cut','crit',8,1),
+               T('Rift-Edged','abilitypow',7,3), T('The Long Step','dmg',6,3)],
+      abilities:[
+        {id:'shatterstep', n:'Shatterstep', i:'💥', at:4, cd:5, d:'Step three times in one breath — 150%, 150%, then 300% on the last.'},
+        {id:'phaseshift', n:'Phaseshift', i:'💠', at:10, passive:true, d:'You are never entirely here — every blow that finds you loses 15% of itself into the Verge.'},
+        {id:'voidlance', n:'Voidlance', i:'🔱', at:16, cd:12, d:'900% guaranteed damage down a line the world was not using, and two rounds pinned to it.'},
+      ]},
+    {id:'vergekeeper', n:'Vergekeeper', i:'🌌', theme:'Someone has to hold the door. It may as well be you.',
+      talents:[T('Threshold Stance','def',5,2), T('Deep Reserves','maxhp',5,2),
+               T('Verge Attunement','abilitypow',8,2), T('Keeper\'s Eye','acc',4,2),
+               T('Toll of Passage','gold',10,2), T('Border Scholarship','xpboost',6,2),
+               T('Gatestone','def',12,1), T('Anchorheart','maxhp',12,1),
+               T('Warden of Nothing','abilitypow',7,3), T('The Kept Door','def',6,3)],
+      abilities:[
+        {id:'entropy', n:'Entropy', i:'♒', at:4, cd:6, d:'280% guaranteed damage, and the spilled edge of it hardens into a ward worth 20% of your health.'},
+        {id:'riftsiphon', n:'Rift Siphon', i:'🕳️', at:10, passive:true, d:'The door leaks your way for once — you recover 3% of your health every round.'},
+        {id:'unmake', n:'Unmake', i:'🌌', at:16, cd:13, d:'600% guaranteed damage, a quarter of your health restored, and one round in which you decline to exist at all.'},
+      ]},
+  ]};
 /* what each closed door is waiting for */
 const CLASS_UNLOCK = {
   runewarden: {
@@ -7072,6 +7507,19 @@ const CLASS_UNLOCK = {
     take: p => { p.inv.stardew_drop -= 5; if (p.inv.stardew_drop <= 0) delete p.inv.stardew_drop;
                  p.inv.astral_thread -= 4; if (p.inv.astral_thread <= 0) delete p.inv.astral_thread; },
     open:'\u{1F329}️ <span class="lvl">You hum the note back at it. The rain stops mid-air, holds, and steps aside.</span>',
+  },
+  riftwalker: {
+    n:'The Riftwalker\u2019s door', i:'🌀',
+    ask:'A hairline crack in the Class Hall floor that hums in a key Curator Vell would recognise. It only widens for someone the Rift Below has measured personally — fifty waves down, and paid for in tokens.',
+    reqs: p => [
+      {ok: riftBest() >= 50, t:`the Rift Below, fifty waves deep (best ${riftBest()}/50)`},
+      {ok: combatLevelOf(p) >= 50, t:`combat level 50 (${combatLevelOf(p)})`},
+      {ok: (p.inv.rift_token||0) >= 80, t:`Rift tokens ${Math.min(80,p.inv.rift_token||0)}/80`},
+      {ok: (p.inv.void_shard||0) >= 4, t:`Void shards ${Math.min(4,p.inv.void_shard||0)}/4`},
+    ],
+    take: p => { p.inv.rift_token -= 80; if (p.inv.rift_token <= 0) delete p.inv.rift_token;
+                 p.inv.void_shard -= 4; if (p.inv.void_shard <= 0) delete p.inv.void_shard; },
+    open:'🌀 <span class="lvl">The crack takes the tokens the way the Rift takes everything, and opens like it was never a floor.</span>',
   },
 };
 function classUnlocked(cid){
@@ -7123,6 +7571,10 @@ const LEGENDS = {
     ['skyfiddle',      'Skyfiddle',                   '\u{1F3BB}', 'weapon', 'ranged', 72, [['abilitypow',14],['crit',10]], 12],
     ['stormweave_coat','Coat of Nine Weathers',       '\u{1F9E5}', 'body',   'any',    40, [['acc',12],['maxhp',12]],       9],
   ],
+  riftwalker:[
+    ['verge_edge',    "The Verge's Edge",             '🗡️', 'weapon', 'melee', 72, [['dmg',12],['crit',12]],  12],
+    ['walker_shroud', 'Shroud of the Long Step',      '🧥', 'body',   'any',   40, [['maxhp',12],['dmg',8]],   9],
+  ],
 };
 /* =====================================================================
    ABILITY MODS — the best gear does not just add numbers, it changes the
@@ -7137,6 +7589,7 @@ const GEAR_MODS = {
   dawnbreaker:      {k:'holy_double',   d:"Holy Strike's healing is doubled"},
   firstword:        {k:'ward_double',   d:"Runestrike's ward is doubled"},
   skyfiddle:        {k:'fourth_arc',    d:'Chain Lightning gains a fourth arc'},
+  verge_edge:       {k:'walker_charge', d:'Riftstrike also banks an extra Rift Charge'},
   bellringer:       {k:'bell_toll',     d:'auto-attacks against a frozen or staggered enemy always crit'},
   author_pen:       {k:'rewrite',       d:'each ability has a 12% chance to finish off cooldown'},
 };
@@ -7183,6 +7636,7 @@ function procTime(e){
       t *= 0.75;                                 /* the Glimmerline Rod — 25% faster fishing */
     const tr = TRINKET_BY_SKILL[sk];
     if (tr && (P().inv[tr]||0) > 0) t *= 0.95;   /* Bram's keepsakes — 5% faster while in your pack */
+    t *= guildSpeedMult(sk);                     /* the secret guilds' rank-1 boons */
     const ms = MASTER_BY_SKILL[sk];
     if (ms && (P().inv[ms]||0) > 0) t *= 0.92;   /* the guild's master tools — another 8% */
     if (sk === 'smithing' && (P().inv.forgeheart||0) > 0) t *= 0.88;   /* Hollin's Forgeheart */
@@ -7268,6 +7722,7 @@ function resolveAction(){
       gain(entry.item, qty);
       grantXp(skill, inBloom ? Math.round(entry.xp*1.5) : entry.xp);
       rollPetDrop(skill);
+      rollMountFromSkill(skill);
       if (entry.item === 'raw_mistfish') mermaidCatch();
       spawnDrop(`${ITEMS[entry.item].i} +${qty}`); hitTarget();
       log(`+${qty} ${ITEMS[entry.item].n} <span class="good">(+${entry.xp} ${skill} xp)</span>${doubled?' <span class="lvl">🪄 double harvest!</span>':qty>1?' <span class="lvl">rich vein!</span>':''}`);
@@ -7334,6 +7789,7 @@ function resolveAction(){
     gain(entry.id);
     grantXp(skill, entry.xp);
     rollPetDrop(skill);
+    rollMountFromSkill(skill);
     spawnDrop(`${ITEMS[entry.id].i} +1`); hitTarget();
     log(`Made ${ITEMS[entry.id].n} <span class="good">(+${entry.xp} ${skill} xp)</span>`);
   }
@@ -7455,7 +7911,7 @@ function socketBonusVal(hook){
 }
 function gearBonusVal(hook){
   let v = socketBonusVal(hook) + enchBonusVal(hook);
-  for (const slot of ['weapon','helm','body','legs','pet','tool']){
+  for (const slot of ['weapon','helm','body','legs','pet','tool','mount']){
     const id = P().gear[slot]; if (!id) continue;
     for (const b of bonusList(EQUIP[id])) if (b.hook === hook) v += b.v;
   }
@@ -7551,7 +8007,7 @@ function drinkPotion(k){
   return true;
 }
 function statVal(hook){
-  let v = gearBonusVal(hook) + buffVal(hook) + setBonusVal(hook) + endowVal(hook);
+  let v = gearBonusVal(hook) + buffVal(hook) + setBonusVal(hook) + endowVal(hook) + guildBonusVal(hook);
   const cls = classOf(P()); if (!cls) return v;
   cls.branches.forEach((br,bi) => {
     br.talents.forEach((t,i) => { const r = (P().talents[bi]||{})[i]||0; if (r && t.hook===hook) v += r*t.per; });
@@ -7668,6 +8124,7 @@ function warChest(){
   const base = MONSTERS.find(m => m.id === combat.mid);
   P().kills[base.id] = (P().kills[base.id]||0) + 1;
   rollPetDrop(base.id);
+  rollMountFromKill();
   P().raids[base.id] = (P().raids[base.id]||0) + 1;
   const g = gainGold(Math.round(base.gold[1] * 5 * (1 + statVal('gold')/100)));
   let msg = `+${g.toLocaleString()} gp`;
@@ -7762,6 +8219,8 @@ const CLASS_RES = {
                builders:['runestrike','gravebind','glyphburst'], spenders:['wardstone','bulwarkup','mountainheart','worldrune']},
   stormsinger:{n:'Crescendo',     i:'\u{1F3B5}', empty:'\u00b7',
                builders:['thunderclap','galewind','chainlight'], spenders:['refrain','warcry','maelstrom','lastsong']},
+  riftwalker: {n:'Rift Charges',  i:'🌀', empty:'\u00b7',
+               builders:['riftstrike','voidgrasp','shatterstep'], spenders:['blinkstep','entropy','voidlance','unmake']},
 };
 function resSpec(){ return CLASS_RES[P().class] || null; }
 function resRole(aid){
@@ -7922,6 +8381,20 @@ function runAbility(a, fx){
                         healPlayer(Math.round(maxHp()*0.20*apow)); setCd('warcry',8); fx.push('\u{1F4E3} War Song!'); break;
     case 'lastsong':    P().hp = maxHp(); combat.buffs.dmg = {mult:Math.round(60*apow), rounds:5};
                         combat.immune = Math.max(combat.immune, 2); setCd('lastsong',13); fx.push('\u{1F3BA} The Last Song'); break;
+    /* ---- Riftwalker ---- */
+    case 'riftstrike':  hit(3.4, false, '🌀');
+                        if (hasMod('walker_charge') && combat.res < RES_MAX){ combat.res++; fx.push('🌀 the Edge banks one'); }
+                        setCd('riftstrike',3); break;
+    case 'blinkstep':   hit(1.8, false, '💠'); combat.dodge = Math.max(combat.dodge, 2);
+                        setCd('blinkstep',7); fx.push('💠 you are elsewhere'); break;
+    case 'voidgrasp':   hit(2.4, true, '🕳️'); combat.mdots.push(cbDot(0.4,3,'🕳️')); setCd('voidgrasp',6); break;
+    case 'shatterstep': hit(1.5, false, '💥'); hit(1.5, false, '💥'); hit(3.0, false, '💥');
+                        setCd('shatterstep',5); break;
+    case 'entropy':     hit(2.8, true, '♒'); addWard(Math.round(maxHp()*0.20*apow), fx); setCd('entropy',6); break;
+    case 'voidlance':   hit(9.0, true, '🔱'); combat.frozen = Math.max(combat.frozen, 2);
+                        setCd('voidlance',12); fx.push('🔱 Voidlance!'); break;
+    case 'unmake':      hit(6.0, true, '🌌'); healPlayer(Math.round(maxHp()*0.25*apow));
+                        combat.immune = Math.max(combat.immune, 1); setCd('unmake',13); fx.push('🌌 you decline to exist'); break;
     case 'supernova':  hit(9.0, true, '\u{1F30B}'); healPlayer(Math.round(maxHp()*0.20*apow));
                        setCd('supernova',12); fx.push('\u{1F30B} Supernova!'); break;
     case 'soulharvest':{ let tot = 0;
@@ -8011,6 +8484,7 @@ function monsterFelled(fx){
   }
   if (net.connected) netSend({type:'kill', mid:baseMon.id, n:P().name});
   rollPetDrop(baseMon.id);
+  rollMountFromKill();
   /* Loomling the Grave Weaver — a whisper-rare drop from ANY monster */
   if (!((P().inv.pet_loom||0) > 0 || P().gear.pet === 'pet_loom' || houseOf().pets.includes('pet_loom'))
       && Math.random() < LOOM_CHANCE){
@@ -8136,6 +8610,7 @@ function combatRound(){
   if (hasAbility('sanctuary')) healPlayer(Math.round(maxHp()*0.03));
   if (hasAbility('highwater')) healPlayer(Math.round(maxHp()*0.05));   /* the tide never goes out */
   if (hasAbility('echoes')) healPlayer(Math.round(maxHp()*0.04));      /* the song does not stop */
+  if (hasAbility('riftsiphon')) healPlayer(Math.round(maxHp()*0.03));  /* the door leaks your way */
   if (hasMod('biolume_glow')) healPlayer(Math.round(maxHp()*0.02));    /* the crown never dims */
   if (hasMod('echo_strike') && bd > 0) dmgMon(rollDmg(0.4, true), '🕳️');
   if (hasAbility('staticfield') && bd > 0) dmgMon(rollDmg(0.25, true), '\u{1F329}️');
@@ -8205,7 +8680,7 @@ function combatRound(){
     if (Math.random() < clamp(0.55 + (mon.atk - defv)*0.01, 0.1, 0.9)){
       let md = 1 + Math.floor(Math.random()*mon.mh);
       if (combat.charging){ md = Math.round(md*2); combat.charging = false; fx.push('\u{1F402} CHARGE'); }
-      const dr = (hasAbility('eclipse') ? 12 : 0) + (hasAbility('aegis') ? 12 : 0);
+      const dr = (hasAbility('eclipse') ? 12 : 0) + (hasAbility('aegis') ? 12 : 0) + (hasAbility('phaseshift') ? 15 : 0);
       if (dr > 0) md = Math.max(1, Math.round(md * (1 - dr/100)));
       const raw = md;
       if (combat.ward > 0){                       /* the Runewarden's stone takes it first */
@@ -8325,6 +8800,7 @@ function buyItem(vid, item, qty){
 function canEquip(id){
   const e = EQUIP[id]; if (!e) return 'Not equipment';
   if (e.pet) return null;                       /* pets: anyone, any time */
+  if (e.mount) return null;                     /* mounts too — riding needs no class */
   if (e.tool) return levelFor(P().xp[e.reqSkill]) >= e.req ? null : `Needs ${e.reqSkill} ${e.req}`;   /* tools: no class needed */
   const cls = classOf(P()); if (!cls) return 'Choose a class first';
   if (e.classOnly && e.classOnly !== P().class){
@@ -8513,15 +8989,18 @@ const ZONE_SECRETS = {
   blossom: [
     {n:'The Sprite Court',         found:p => (p.chain3||0) >= 3},
     {n:'The wishing carp',         found:p => !!(p.caught && p.caught.wishing_carp) || (p.inv.wishing_carp||0) > 0},
+    {n:'The Verdant Circle',       found:p => (p.guilds||{}).verdant !== undefined},
   ],
   coast: [
     {n:'Old Salt Finnick',         found:p => !!p.finnickDone},
     {n:'A Shared Ember',           found:p => !!p.twinDone},
+    {n:"The Tidewrights' Haven",   found:p => (p.guilds||{}).tide !== undefined},
   ],
   gloom: [
     {n:'The Everlantern',          found:p => (p.chain||0) >= 4},
     {n:'All eight lost lanterns',  found:p => Object.keys(p.lanterns||{}).length >= 8},
     {n:'The Hollow Man, felled',   found:p => (p.kills.hollowman||0) > 0},
+    {n:'The Gilded Hand',          found:p => (p.guilds||{}).gild !== undefined},
   ],
   frost: [
     {n:'Toby and the mudpuppy',    found:p => (p.toby||0) >= 2},
@@ -8531,6 +9010,8 @@ const ZONE_SECRETS = {
     {n:'The clutch returned',      found:p => (p.eggsReturned||0) >= 8},
     {n:'Nyxaroth the Eggthief',    found:p => (p.eggthief||0) >= 2},
     {n:'The Rift, twenty deep',    found:p => (p.riftBest||0) >= 20},
+    {n:'The Deepdelve Union',      found:p => (p.guilds||{}).deep !== undefined},
+    {n:'The Ember Vanguard',       found:p => (p.guilds||{}).vanguard !== undefined},
   ],
   marsh: [
     {n:'The four margin notes',    found:p => Object.keys(p.notes||{}).length >= 4},
@@ -8828,6 +9309,12 @@ function questLog(){
     beaconsLit() >= BEACONS.length ? 'complete' : `${beaconsLit()}/${BEACONS.length} lit · each takes 2× Aetherite ore + 1× Stardew`,
     beaconsLit() >= BEACONS.length);
   chain(TESSA_CHAIN, 'tessa', '\u{1F415}', 'Tessa the Destroyer', 'Starfall Reaches');
+  /* the five secret guilds — only once you have found the door */
+  for (const G of GUILDS){
+    if ((p.guilds||{})[G.id] === undefined) continue;
+    const gst = p.guilds[G.id]||0, gch = GUILD_CHAINS[G.id];
+    push(G.i, G.n, G.where, gst >= gch.length ? 'complete' : `${gch[gst].n} — ${gch[gst].prog(p)}`, gst >= gch.length);
+  }
   chain(HUNT_CHAIN, 'hunt', '\u{1F3F9}', 'Warden Hesk — the Long Hunt', 'Embervale Castle');
   push('\u{1F9E1}', 'The Twin Beacons', `${TWIN_A.x},${TWIN_A.y} and ${TWIN_B.x},${TWIN_B.y}`,
     twinDone() ? 'lit at both ends' : 'two players, two braziers, within one minute of each other', twinDone());
@@ -8936,16 +9423,54 @@ function renderQuestLog(){
     body.appendChild(d);
     return;
   }
+  const hint = document.createElement('div');
+  hint.className = 'locDesc';
+  hint.innerHTML = '📌 Pin a quest and its requirements follow you — a faded card on the left of the world. Pin it again to let it go. (Up to '+TRACK_MAX+'.)';
+  body.appendChild(hint);
   for (const q of list){
     const d = document.createElement('div');
     d.className = 'bkRow ' + (q.done ? 'met' : 'unmet');
+    const on = !!(P().tracked||{})[q.n];
     d.innerHTML = `<span class="bkLvl">${q.i}</span><span>${q.done?'✓':'·'}</span>` +
       `<span class="bkName">${escapeHtml(q.n)}</span>` +
-      `<span class="bkX">${q.done ? 'complete' : escapeHtml(q.obj)}</span>`;
+      `<span class="bkX">${q.done ? 'complete' : escapeHtml(q.obj)}</span>` +
+      `<span class="qpin${on?' on':''}" title="${on?'Unpin from the tracker':'Pin to the tracker'}">📌</span>`;
     d.title = `${q.n} — ${q.where}. ${q.done ? 'Complete.' : 'Next: ' + q.obj}`;
+    d.querySelector('.qpin').onclick = (ev) => { ev.stopPropagation(); toggleTrack(q.n); };
     body.appendChild(d);
   }
 }
+/* ---- the pinned-quest tracker (left edge of the world) ---- */
+const TRACK_MAX = 5;
+function toggleTrack(n){
+  const p = P(); p.tracked = p.tracked || {};
+  if (p.tracked[n]) delete p.tracked[n];
+  else {
+    if (Object.keys(p.tracked).length >= TRACK_MAX){ toast(`📌 Tracker is full — unpin one first (${TRACK_MAX} max).`); return; }
+    p.tracked[n] = true;
+    toast('📌 Pinned — watch the left of your screen.');
+  }
+  renderQuestTracker();
+  if (document.getElementById('questModal').style.display === 'block') renderQuestLog();
+}
+function renderQuestTracker(){
+  const el = document.getElementById('questTracker');
+  if (!el) return;
+  if (!activeId){ el.innerHTML = ''; return; }
+  const p = P(), keys = Object.keys(p.tracked||{});
+  if (!keys.length){ el.innerHTML = ''; return; }
+  const all = questLog();
+  let html = '';
+  for (const n of keys){
+    const q = all.find(x => x.n === n);
+    if (!q){ delete p.tracked[n]; continue; }
+    html += `<div class="qtCard${q.done?' qtDone':''}"><span class="qtName">${q.i} ${escapeHtml(q.n)}</span>` +
+      `<div class="qtWhere">${escapeHtml(q.where)}</div>` +
+      `<div class="qtObj">${q.done ? '✓ complete — unpin it in the Quest Log' : escapeHtml(q.obj)}</div></div>`;
+  }
+  el.innerHTML = html;
+}
+setInterval(() => { try { renderQuestTracker(); } catch(e){} }, 1500);
 /* ---- 📖 the Book of Knowledge — every level requirement in the realm ---- */
 let bookTab = 'woodcutting';
 function bookSections(){
@@ -9024,6 +9549,11 @@ function bookSections(){
       pet_tessa: 'bring Tessa the Destroyer all four of her gifts \u2014 she is up in the Starfall Reaches, somehow',
       pet_mystic: "answer Nyxaroth the Eggthief — Vessarix opens the way once all eight eggs are home",
       pet_rift: 'buy it from Curator Vell for 60 rift tokens, beside the Rift Below in Xen\'tara',
+      pet_sprig: 'reach rank 3 with the Verdant Circle — a hidden guild, somewhere green',
+      pet_karst: 'reach rank 3 with the Deepdelve Union — a hidden guild, somewhere high and dark',
+      pet_brine: "reach rank 3 with the Tidewrights' Haven — a hidden guild, somewhere the tide knows",
+      pet_filigree: 'reach rank 3 with the Gilded Hand — a hidden guild, somewhere under the candles',
+      pet_pyre: 'reach rank 3 with the Ember Vanguard — a hidden guild, somewhere scorched',
     };
     return SPECIAL[pt.id] || 'a story the realm has not told you yet';
   };
@@ -9034,6 +9564,15 @@ function bookSections(){
       const benefit = bonusText(EQUIP[pt.id]) || 'good company';
       const r = row(1, pt.i, pt.n, `${owned ? '✓ found' : 'still out there'} · ${benefit}`,
         `${pt.n} — ${benefit}. How to find: ${petSourceTxt(pt)}.` + (owned ? '' : ' (Not found yet.)'));
+      r.met = owned;
+      return r;
+    }).sort((a,b) => (b.met?1:0)-(a.met?1:0)) });
+  secs.push({id:'mounts', n:'🐎 Mounts', skill:null,
+    rows: MOUNTS.map(mt => {
+      const owned = activeId ? hasMount(mt.id) : false;
+      const benefit = bonusText(EQUIP[mt.id]) || '';
+      const r = row(1, mt.i, mt.n, `${owned ? '✓ tamed — +30% overworld speed' : 'still running free'}${benefit ? ' · '+benefit : ''}`,
+        `${mt.n} — a super-rare mount. Ride it and the whole overworld goes by ~30% faster${benefit ? '; also '+benefit : ''}. How to find: ${mt.how}.` + (owned ? '' : ' (Not tamed yet.)'));
       r.met = owned;
       return r;
     }).sort((a,b) => (b.met?1:0)-(a.met?1:0)) });
@@ -9418,6 +9957,23 @@ const MAP_BUILDINGS = [
   {x:21,y:49,i:'🏛️',loc:'bank',n:'Bank'},
   {x:64,y:96,i:'⚓',loc:'tidewatch',n:'Tidewatch'},
   {x:63,y:95,i:'🏛️',loc:'bank',n:'Bank'},
+  /* v67: every town works for a living — stations in the regions, vendors selling what the land makes */
+  {x:24,y:49,i:'🔥',loc:'forge',n:'Forge'},
+  {x:27,y:49,i:'🔨',loc:'anvil',n:'Anvil'},
+  {x:61,y:93,i:'🍳',loc:'kitchen',n:'Hearth'},
+  {x:67,y:93,i:'🧵',loc:'loom',n:'Loom'},
+  {x:52,y:58,i:'🏘️',loc:'petalmarket',n:'Petalmarket'},
+  {x:49,y:58,i:'🏛️',loc:'bank',n:'Bank'},
+  {x:55,y:58,i:'🧵',loc:'loom',n:'Loom'},
+  {x:58,y:58,i:'✂️',loc:'workshop',n:'Workshop'},
+  {x:31,y:6,i:'🏘️',loc:'rimeholt',n:'Rimeholt'},
+  {x:28,y:6,i:'🏛️',loc:'bank',n:'Bank'},
+  {x:34,y:6,i:'🔥',loc:'forge',n:'Forge'},
+  {x:37,y:6,i:'🍳',loc:'kitchen',n:'Hearth'},
+  {x:91,y:22,i:'🏘️',loc:'duskmarket',n:'Duskmarket'},
+  {x:88,y:22,i:'🏛️',loc:'bank',n:'Bank'},
+  {x:94,y:22,i:'🔥',loc:'forge',n:'Forge'},
+  {x:97,y:22,i:'🔨',loc:'anvil',n:'Anvil'},
 ];
 const MAP_DECO = [
   {x:50,y:38,i:'🏠'},{x:62,y:38,i:'🏠'},{x:50,y:50,i:'🏠'},{x:62,y:50,i:'🏠'},
@@ -10412,6 +10968,31 @@ const DUNGEONS = {
     torches:[[2,1],[7,1],[12,1],[18,1],[23,1],[2,9],[12,9],[23,9]],
     enterMsg:'🕳️ The cave mouth breathes cold at you — not winter cold. Older. The walls are blue ice with shapes in them, and something deeper in is singing to the storm. <b>Icefang Hollow.</b>',
   },
+  broodhollow: {
+    n:'The Brood Hollow', w:28, h:11, entry:[1,5], tier:3, clearable:true,
+    floor:['#2a2230','#2e2634','#262030','#322a3a','#2c2432'], wallc:['#6a5a78','#141018'],
+    mask:[
+      '############################',
+      '#........#..........#......#',
+      '#........#..........#......#',
+      '#........#..........#......#',
+      '#........1..........2......#',
+      '#........#..........#......#',
+      '#........#..........#......#',
+      '#........#..........#......#',
+      '#........#..........#......#',
+      '#........#..........#......#',
+      '############################',
+    ],
+    pillars:[[4,2],[4,8],[14,2],[14,8],[24,2],[24,8]],
+    rocks:[],
+    monsters:[['broodling',3,3,27,1],['broodling',6,7,28,1],['broodling',4,6,27,1],
+              ['silkspinner',12,3,30,'e2'],['silkspinner',17,7,31,'e2'],['palewidow',15,5,32,'e2'],
+              ['broodmother',24,5,34,3]],
+    chests:[[26,5],[26,1]],
+    torches:[[2,1],[7,1],[12,1],[18,1],[23,1],[2,9],[12,9],[23,9]],
+    enterMsg:'🕸️ The barrow narrows into a gallery hung floor to ceiling with silk — sheets of it, ropes of it, whole rooms wrapped and put away. Something in the far dark is still spinning. <b>The Brood Hollow.</b> Every last one of them is made of thread.',
+  },
   ravensworth: {
     n:'Ravensworth Manor', w:34, h:23, entry:[16,12], tier:4, clearable:true,
     floor:['#4a3c30','#514236','#453930','#57473a','#4d3f33'], wallc:['#7a6250','#241d18'],
@@ -10592,6 +11173,7 @@ const MAP_LADDERS = [
   {x:150,y:44, d:'astral', n:'The Starfall Gate'},
   {x:118,y:88, d:'depths', n:'Molten Depths'},
   {x:115,y:69, d:'fathom', n:'The Fathom Library'},
+  {x:18,y:62, d:'broodhollow', n:'The Brood Hollow'},
 ];
 function curDun(){ return plane === 'over' ? null : (plane === 'house' ? houseDun() : plane === 'house2' ? houseDun2() : DUNGEONS[plane]); }
 /* the manor, rebuilt as a dungeon-shaped object every time the layout changes */
@@ -10995,6 +11577,7 @@ function blockedAt(x,y){
   if (MAP_MONSTERS.some(m => m.x===x && m.y===y && !spawnDown(x,y))) return true;
   if (MAP_LADDERS.some(hit)) return true;
   if (WANDER_BY_TILE[x+','+y]) return true;                          /* a lair */
+  if (GUILD_BY_TILE[x+','+y]) return true;                           /* a hidden guild door */
   if ((x===TWIN_A.x && y===TWIN_A.y) || (x===TWIN_B.x && y===TWIN_B.y)) return true;   /* the braziers */
   { const [fx0,fy0] = fairPos(); if (x===fx0 && y===fy0) return true; }   /* the fair */
   if (x===HESK.x && y===HESK.y) return true;                         /* Warden Hesk */
@@ -11062,7 +11645,8 @@ function renderedPos(){
 }
 function stepTo(nx, ny){
   const diag = (nx !== P().mapX) && (ny !== P().mapY);
-  const dur = diag ? Math.round(STEP_MS*1.35) : STEP_MS;   /* diagonals cover more ground, so they take longer */
+  let dur = diag ? Math.round(STEP_MS*1.35) : STEP_MS;   /* diagonals cover more ground, so they take longer */
+  if (plane === 'over' && P().gear.mount) dur = Math.round(dur * MOUNT_SPEED);   /* riding: ~30% faster across the overworld */
   moveAnim = {fx:P().mapX, fy:P().mapY, tx:nx, ty:ny, t0:Date.now(), dur};
   nextStepAt = Date.now() + dur;
   petTrail = {x:P().mapX, y:P().mapY};
@@ -11160,6 +11744,7 @@ function runInteract(){
   else if (it.kind === 'chest'){ lootDungeonChest(it.key); }
   else if (it.kind === 'hushdoor'){ openHush(); }
   else if (it.kind === 'wander'){ wakeWanderer(WANDERERS.find(w => w.id === it.id)); }
+  else if (it.kind === 'guild'){ openGuild(it.G); }
   else if (it.kind === 'twin'){ lightTwin(it.w === 'A' ? TWIN_A : TWIN_B); }
   else if (it.kind === 'building'){ openOverlay(it.loc); }
   else if (it.kind === 'npc'){
@@ -11277,6 +11862,7 @@ function mapClick(ev){
   }
   for (const L of MAP_LADDERS) if (L.x===x && L.y===y) return walkTo(x,y,{kind:'ladder', d:L.d, x, y});
   if (WANDER_BY_TILE[x+','+y]) return walkTo(x,y,{kind:'wander', id:WANDER_BY_TILE[x+','+y].id, x, y});
+  if (GUILD_BY_TILE[x+','+y]) return walkTo(x,y,{kind:'guild', G:GUILD_BY_TILE[x+','+y], x, y});
   if (x===TWIN_A.x && y===TWIN_A.y) return walkTo(x,y,{kind:'twin', w:'A', x, y});
   if (x===TWIN_B.x && y===TWIN_B.y) return walkTo(x,y,{kind:'twin', w:'B', x, y});
   if (x===HESK.x && y===HESK.y) return walkTo(x,y,{kind:'building', loc:'hesk', x, y});
@@ -12530,6 +13116,10 @@ function drawMap(){
     crow:{k:'bird', c1:'#2e2a30', c2:'#4a444e', wings:1, beakc:'#c9a23c', sz:0.85},
     jack:{k:'pumpkin', c1:'#d4761e', c2:'#8f4a12', sz:0.95},
     widow:{k:'spider', c1:'#241c28', c2:'#7a2038', sz:0.95},
+    broodling:{k:'spider', c1:'#2c2430', c2:'#9a8ab0', sz:0.7},
+    silkspinner:{k:'spider', c1:'#38303c', c2:'#d8d0e8', sz:0.95},
+    palewidow:{k:'spider', c1:'#c8c0d0', c2:'#7a2038', sz:1.05},
+    broodmother:{k:'spider', c1:'#181018', c2:'#e8e0f0', sz:1.5},
     vampire:{k:'biped', c1:'#2a2432', c2:'#171320', cape:'#7a1f2e', pale:1, fangs:1, sz:0.95},
     vampirelord:{k:'biped', c1:'#1c1826', c2:'#0e0b16', cape:'#8a1226', pale:1, fangs:1, hat:1, sz:1.2},
     hollowman:{k:'biped', c1:'#14121a', c2:'#08070c', hat:1, sz:1.28},
@@ -13577,6 +14167,20 @@ function drawMap(){
         ctx.font = '11px Georgia'; ctx.fillStyle = '#cfd8e8'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText('Ossian 🏮', lx, sy(LAMPWRIGHT.y)+TILE+8);
         if (!done && (Math.floor(now/800))%3===1) draw(LAMPWRIGHT.x, LAMPWRIGHT.y-0.9, '❗', 14);
+      }
+      /* --- the five secret guild doors: a quiet mark, and a shimmer when you are close --- */
+      for (const G of GUILDS){
+        if (!onScreen(G.x, G.y)) continue;
+        const near = Math.abs(P().mapX-G.x) + Math.abs(P().mapY-G.y) <= 9;
+        shadow(G.x, G.y, 7);
+        draw(G.x, G.y-0.2, G.i, Math.max(13, TILE*0.34));
+        if (near){
+          if ((Math.floor(now/700))%2===0) draw(G.x, G.y-0.9, '✨', 12);
+          if ((P().guilds||{})[G.id] !== undefined){
+            ctx.font = '11px Georgia'; ctx.fillStyle = '#e8d8a0'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(G.n, sx(G.x)+TILE/2, sy(G.y)+TILE+8);
+          }
+        }
       }
       /* --- Sigrid the Trapper, camped in Frostpine --- */
       if (onScreen(TRAPPER.x, TRAPPER.y)){
@@ -14929,13 +15533,25 @@ function drawMap(){
   ctx.fillStyle = 'rgba(232,193,90,.5)';
   for (const [ppx,ppy] of worldPath){ if(!onScreen(ppx,ppy))continue; ctx.beginPath(); ctx.arc(sx(ppx)+TILE/2, sy(ppy)+TILE/2, 3.5, 0, Math.PI*2); ctx.fill(); }
 
+  /* a mount is drawn under its rider: bigger shadow, the beast, then the person lifted up */
+  const drawMount = (mx, my, mid) => {
+    const mcx = sx(mx)+TILE/2;
+    ctx.fillStyle = 'rgba(0,0,0,.28)';
+    ctx.beginPath(); ctx.ellipse(mcx, sy(my)+TILE*0.92, TILE*0.28, TILE*0.08, 0, 0, Math.PI*2); ctx.fill();
+    ctx.save(); ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=5;
+    ctx.font = Math.round(30*S)+'px serif';
+    ctx.fillText(ITEMS[mid].i, mcx, sy(my)+TILE*0.80 + Math.sin(now/300)*1.4);
+    ctx.restore();
+  };
+
   /* partner (LAN) — only when on the same plane */
   if (net.connected && net.remoteId && state.players[net.remoteId] && (state.players[net.remoteId].plane||'over') === plane){
     const rp = state.players[net.remoteId];
     const ci = rp.class && CLASSES[rp.class] ? CLASSES[rp.class].i : (net.remoteId==='k' ? '🧙‍♂️' : '🧝‍♀️');
     const rx = typeof rp.mapX==='number'?rp.mapX:56, ry = typeof rp.mapY==='number'?rp.mapY:44;
-    shadow(rx, ry, 10);
-    drawPerson(rx, ry, gearedLook(rp, net.remoteId), false);
+    const rMount = plane==='over' && rp.gear && rp.gear.mount && ITEMS[rp.gear.mount];
+    if (rMount) drawMount(rx, ry, rp.gear.mount); else shadow(rx, ry, 10);
+    drawPerson(rx, ry - (rMount ? 0.33 : 0), gearedLook(rp, net.remoteId), false);
     ctx.font='11px Georgia'; ctx.fillStyle='#8fc3dd';
     ctx.fillText(rp.name, sx(rx)+TILE/2, sy(ry)+TILE+8);
   }
@@ -14961,9 +15577,10 @@ function drawMap(){
     ctx.restore();
   }
 
-  /* player — drawn figure gliding between tiles */
-  shadow(rp2.x, rp2.y, 10);
-  drawPerson(rp2.x, rp2.y, gearedLook(P(), activeId), worldPath.length > 0 || heldKeys.size > 0 || !!(moveAnim && (Date.now()-moveAnim.t0) < STEP_MS));
+  /* player — drawn figure gliding between tiles (on their mount, if riding) */
+  const myMount = plane==='over' && P().gear && P().gear.mount && ITEMS[P().gear.mount] ? P().gear.mount : null;
+  if (myMount) drawMount(rp2.x, rp2.y, myMount); else shadow(rp2.x, rp2.y, 10);
+  drawPerson(rp2.x, rp2.y - (myMount ? 0.33 : 0), gearedLook(P(), activeId), worldPath.length > 0 || heldKeys.size > 0 || !!(moveAnim && (Date.now()-moveAnim.t0) < STEP_MS));
 
   /* level-up fireworks around the character */
   if (levelFx.length){
