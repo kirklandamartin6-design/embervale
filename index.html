@@ -1,1 +1,2024 @@
-# embervale
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Embervale — an RPG for k &amp; Molly</title>
+<style>
+  :root{
+    --bg:#14100b; --panel:#241c12; --panel2:#2e2417; --border:#4d3d24;
+    --gold:#e8c15a; --gold-dim:#a8893c; --text:#e8ddc8; --muted:#9b8c6f;
+    --green:#7fb069; --red:#c05746; --blue:#6ca6c1;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:Georgia,'Times New Roman',serif;
+    background-image:radial-gradient(ellipse at 50% -20%, #2a2013 0%, #14100b 60%);
+    min-height:100%;
+  }
+  button{font-family:inherit;}
+
+  /* ---------- profile select ---------- */
+  #profileScreen{
+    position:fixed; inset:0; background:radial-gradient(ellipse at 50% 30%, #2c2113 0%, #0e0b07 75%);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:24px; z-index:50;
+  }
+  #profileScreen h1{font-size:52px; color:var(--gold); letter-spacing:4px; text-shadow:0 3px 12px rgba(0,0,0,.8);}
+  #profileScreen .sub{color:var(--muted); font-style:italic; margin-top:-14px;}
+  .profileCards{display:flex; gap:24px; margin-top:10px;}
+  .pcard{
+    width:220px; padding:28px 20px; background:var(--panel); border:2px solid var(--border);
+    border-radius:10px; text-align:center; cursor:pointer; transition:all .15s;
+  }
+  .pcard:hover{border-color:var(--gold); transform:translateY(-4px); box-shadow:0 8px 24px rgba(0,0,0,.5);}
+  .pcard .avatar{font-size:56px;}
+  .pcard h2{color:var(--gold); margin:10px 0 4px; font-size:26px;}
+  .pcard .plvl{color:var(--muted); font-size:14px;}
+  .loadRow{display:flex; gap:8px; margin-top:8px;}
+  .loadRow input{
+    width:340px; padding:8px 10px; background:#1a1510; border:1px solid var(--border);
+    color:var(--text); border-radius:6px; font-family:monospace; font-size:12px;
+  }
+
+  /* ---------- layout ---------- */
+  #game{display:none; max-width:1280px; margin:0 auto; padding:12px;}
+  header{
+    display:flex; align-items:center; gap:16px; padding:10px 16px; margin-bottom:12px;
+    background:linear-gradient(#2e2417,#241c12); border:2px solid var(--border); border-radius:10px;
+  }
+  header .title{font-size:24px; color:var(--gold); letter-spacing:2px;}
+  header .who{color:var(--text); font-size:15px;}
+  header .gold-amt{color:var(--gold); font-weight:bold;}
+  header .spacer{flex:1;}
+  .btn{
+    background:linear-gradient(#4d3d24,#3a2e1b); color:var(--gold); border:1px solid var(--gold-dim);
+    padding:7px 14px; border-radius:6px; cursor:pointer; font-size:13px;
+  }
+  .btn:hover{filter:brightness(1.25);}
+  .btn.small{padding:4px 9px; font-size:12px;}
+  .btn:disabled{opacity:.4; cursor:default;}
+
+  .cols{display:grid; grid-template-columns:200px 1fr 300px; gap:12px; align-items:start;}
+  .panel{background:var(--panel); border:2px solid var(--border); border-radius:10px; padding:12px;}
+  .panel h3{
+    color:var(--gold); font-size:15px; letter-spacing:1px; margin-bottom:10px;
+    border-bottom:1px solid var(--border); padding-bottom:6px; text-transform:uppercase;
+  }
+
+  /* skills */
+  .skillRow{display:flex; align-items:center; gap:8px; padding:5px 4px; border-radius:5px; font-size:14px;}
+  .skillRow:hover{background:var(--panel2);}
+  .skillRow .sicon{width:22px; text-align:center;}
+  .skillRow .sname{flex:1;}
+  .skillRow .slvl{color:var(--gold); font-weight:bold;}
+  .skillbar{height:3px; background:#1a1510; border-radius:2px; margin:0 4px 4px 34px;}
+  .skillbar i{display:block; height:100%; background:var(--green); border-radius:2px;}
+  .totalRow{margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:13px; color:var(--muted); text-align:center;}
+
+  /* tabs */
+  .tabs{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;}
+  .tab{
+    background:var(--panel2); border:1px solid var(--border); color:var(--muted);
+    padding:7px 13px; border-radius:6px; cursor:pointer; font-size:13px;
+  }
+  .tab.active{background:linear-gradient(#5a4629,#42341d); color:var(--gold); border-color:var(--gold-dim);}
+  .locDesc{color:var(--muted); font-style:italic; font-size:13px; margin-bottom:12px;}
+
+  .actGrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:10px;}
+  .act{
+    background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px; cursor:pointer;
+    transition:border-color .12s;
+  }
+  .act:hover{border-color:var(--gold-dim);}
+  .act.locked{opacity:.45; cursor:default;}
+  .act.running{border-color:var(--green); box-shadow:0 0 0 1px var(--green);}
+  .act.secret{border-color:#7a5cc7; box-shadow:0 0 8px rgba(122,92,199,.45); animation:secretGlow 2s ease-in-out infinite alternate;}
+  @keyframes secretGlow{from{box-shadow:0 0 4px rgba(122,92,199,.25)}to{box-shadow:0 0 12px rgba(122,92,199,.6)}}
+  .act.barrel{opacity:.35;}
+  .act.barrel:hover{opacity:.9; border-color:var(--gold-dim);}
+  .act .aname{font-size:14px; color:var(--text);}
+  .act .aname .aicon{margin-right:6px;}
+  .act .ainfo{font-size:12px; color:var(--muted); margin-top:4px;}
+  .act .areq{font-size:11px; color:var(--red); margin-top:3px;}
+  .act .amats{font-size:11px; color:var(--blue); margin-top:3px;}
+
+  /* action scene (Melvor-style) */
+  #scene{display:flex; align-items:flex-end; justify-content:space-between; padding:6px 24px 10px; position:relative; min-height:66px;}
+  .scChar{font-size:40px; display:inline-block; animation:bob 1.2s ease-in-out infinite;}
+  #scTool{font-size:26px; display:inline-block; transform-origin:20% 80%; animation:swing .8s ease-in-out infinite; margin-left:-10px;}
+  #scTarget{font-size:44px; display:inline-block; animation:bob 2.6s ease-in-out infinite;}
+  #scTarget.hit{animation:shake .35s;}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+  @keyframes swing{0%,100%{transform:rotate(-25deg)}50%{transform:rotate(40deg)}}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px) rotate(-3deg)}75%{transform:translateX(4px) rotate(3deg)}}
+  .drop{position:absolute; top:14px; font-size:15px; color:var(--green); animation:floatUp 1.1s ease-out forwards; pointer-events:none; white-space:nowrap;}
+  @keyframes floatUp{0%{opacity:0;transform:translateY(8px)}15%{opacity:1}100%{opacity:0;transform:translateY(-40px)}}
+
+  /* combat */
+  .cbScene{display:flex; justify-content:space-between; align-items:center; padding:2px 34px 8px; font-size:38px; position:relative;}
+  #cbMe.atk{animation:lungeR .4s;} #cbFoe.atk{animation:lungeL .4s;}
+  #cbFoe.hit,#cbMe.hit{animation:shake .35s;}
+  @keyframes lungeR{50%{transform:translateX(28px)}}
+  @keyframes lungeL{50%{transform:translateX(-28px)}}
+  #cbTrack{height:6px; background:#1a1510; border-radius:3px; overflow:hidden; margin-bottom:8px;}
+  #cbFill2{height:100%; width:0; background:linear-gradient(#d9b45f,#a8893c);}
+  #combatBox{display:none; margin-top:14px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px;}
+  .cbRow{display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;}
+  .hpTrack{height:12px; background:#1a1510; border-radius:6px; overflow:hidden;}
+  .hpFill{height:100%; transition:width .2s;}
+  .hpFill.me{background:linear-gradient(#8fc17a,#5f9048);}
+  .hpFill.foe{background:linear-gradient(#d1705f,#a03d2e);}
+  .cbFx{font-size:12px; color:var(--blue); margin-top:6px; min-height:14px;}
+  .classCard{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:12px; cursor:pointer;}
+  .classCard:hover{border-color:var(--gold-dim);}
+  .classCard h4{color:var(--gold); font-size:16px; margin-bottom:4px;}
+  .classCard .cflav{font-size:12px; color:var(--muted); font-style:italic; margin-bottom:6px;}
+  .classCard .cab{font-size:11.5px; color:var(--text); margin-top:3px;}
+  .talent{background:var(--panel2); border:1px solid var(--border); border-radius:7px; padding:8px; font-size:12px;}
+  .talent.capped{border-color:var(--gold-dim);}
+  .talent.locked{opacity:.4;}
+  .talent .tname{color:var(--text); font-size:12.5px;}
+  .talent .trank{color:var(--gold); float:right;}
+  .talent .tdesc{color:var(--muted); margin-top:3px;}
+  .talent button{margin-top:5px;}
+  .tierLabel{grid-column:1/-1; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-top:6px;}
+  .abilityCard{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:12.5px;}
+  .abilityCard .an{color:var(--gold);}
+  .abilityCard .ad{color:var(--muted); margin-top:3px; font-size:12px;}
+
+  /* progress + log */
+  #actionBar{margin-top:14px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px; display:none;}
+  #actionBar .abLabel{font-size:13px; margin-bottom:6px; display:flex; justify-content:space-between;}
+  #abTrack{height:14px; background:#1a1510; border-radius:7px; overflow:hidden;}
+  #abFill{height:100%; width:0%; background:linear-gradient(#8fc17a,#5f9048); transition:width .1s linear;}
+  #log{margin-top:12px; max-height:170px; overflow-y:auto; font-size:12.5px; line-height:1.55; color:var(--muted);}
+  #log .good{color:var(--green);} #log .bad{color:var(--red);} #log .lvl{color:var(--gold); font-weight:bold;}
+
+  /* inventory */
+  .invGrid{display:grid; grid-template-columns:repeat(4,1fr); gap:6px;}
+  .slot{
+    background:var(--panel2); border:1px solid var(--border); border-radius:6px;
+    min-height:52px; padding:4px; text-align:center; font-size:11px; color:var(--muted);
+    display:flex; flex-direction:column; justify-content:center; cursor:pointer; position:relative;
+  }
+  .slot .icon{font-size:20px; line-height:1.1;}
+  .slot .qty{position:absolute; top:2px; right:4px; color:var(--gold); font-size:10px; font-weight:bold;}
+  .slot:hover{border-color:var(--gold-dim);}
+  .invTabs{display:flex; gap:6px; margin-bottom:10px;}
+  .invHint{font-size:11px; color:var(--muted); margin-top:8px; font-style:italic;}
+
+  /* shop table */
+  .shopRow{display:flex; align-items:center; gap:8px; padding:6px 4px; border-bottom:1px solid #352a19; font-size:13px;}
+  .shopRow .sn{flex:1;}
+  .shopRow .sv{color:var(--gold); width:80px; text-align:right;}
+  .actGrid .shopRow{grid-column:1/-1;}
+  .actGrid .locDesc{grid-column:1/-1;}
+
+  /* LAN + chat */
+  #lanBox{display:none; margin-top:10px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:10px;}
+  #lanBox textarea{width:100%; height:54px; background:#1a1510; color:var(--text); border:1px solid var(--border); border-radius:6px; font-family:monospace; font-size:10.5px; padding:6px; margin-top:6px;}
+  #chatRow{display:none; gap:6px; margin-top:8px;}
+  #chatRow input{flex:1; background:#1a1510; border:1px solid var(--border); color:var(--text); border-radius:6px; padding:7px 10px; font-family:inherit; font-size:13px;}
+
+  /* modal-ish save box */
+  #saveBox{display:none; margin-top:10px;}
+  #saveBox textarea{
+    width:100%; height:70px; background:#1a1510; color:var(--text); border:1px solid var(--border);
+    border-radius:6px; font-family:monospace; font-size:11px; padding:6px;
+  }
+  .toastWrap{position:fixed; bottom:18px; left:50%; transform:translateX(-50%); z-index:99;}
+  .toast{
+    background:#42341d; color:var(--gold); border:1px solid var(--gold-dim); padding:8px 18px;
+    border-radius:20px; margin-top:6px; font-size:13px; box-shadow:0 4px 14px rgba(0,0,0,.5);
+    animation:fadeout 2.6s forwards;
+  }
+  @keyframes fadeout{0%{opacity:0}8%{opacity:1}80%{opacity:1}100%{opacity:0}}
+  @media (max-width:900px){ .cols{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<!-- ============ PROFILE SELECT ============ -->
+<div id="profileScreen">
+  <h1>⚔ EMBERVALE ⚔</h1>
+  <div class="sub">Chapter II — Blades &amp; Starlight &nbsp;·&nbsp; a world for two</div>
+  <div class="profileCards">
+    <div class="pcard" onclick="startGame('k')">
+      <div class="avatar">🧙‍♂️</div><h2>k</h2><div class="plvl" id="prev-k">New adventurer</div>
+    </div>
+    <div class="pcard" onclick="startGame('molly')">
+      <div class="avatar">🧝‍♀️</div><h2>Molly</h2><div class="plvl" id="prev-molly">New adventurer</div>
+    </div>
+  </div>
+  <div class="loadRow">
+    <input id="loadInput" placeholder="Paste a save code to restore your world…">
+    <button class="btn" onclick="loadFromInput()">Load</button>
+  </div>
+</div>
+
+<!-- ============ GAME ============ -->
+<div id="game">
+  <header>
+    <div class="title">⚔ EMBERVALE</div>
+    <div class="who" id="hdrWho"></div>
+    <div class="who" id="hdrClass"></div>
+    <div class="who">❤️ <span id="hdrHp">10/10</span></div>
+    <div class="who">💰 <span class="gold-amt" id="hdrGold">0</span> gp</div>
+    <div class="who" id="hdrNet"></div>
+    <div class="spacer"></div>
+    <button class="btn small" onclick="openLan()">📡 LAN</button>
+    <button class="btn small" onclick="openSave()">💾 Save code</button>
+    <button class="btn small" onclick="switchPlayer()">🔄 Switch player</button>
+  </header>
+
+  <div class="cols">
+    <!-- skills -->
+    <div class="panel">
+      <h3>Skills</h3>
+      <div id="skillList"></div>
+      <div class="totalRow">Total level: <span id="totalLvl">6</span></div>
+    </div>
+
+    <!-- world -->
+    <div class="panel">
+      <h3 id="locTitle">The World</h3>
+      <div class="tabs" id="locTabs"></div>
+      <div class="locDesc" id="locDesc"></div>
+      <div class="actGrid" id="actGrid"></div>
+      <div id="actionBar">
+        <div class="abLabel"><span id="abName"></span><button class="btn small" onclick="stopAction()">✋ Stop</button></div>
+        <div id="scene">
+          <span><span class="scChar" id="scChar">🧙‍♂️</span><span id="scTool">🪓</span></span>
+          <span id="scTarget">🌳</span>
+        </div>
+        <div id="abTrack"><div id="abFill"></div></div>
+      </div>
+      <div id="combatBox">
+        <div class="cbScene"><span class="scChar" id="cbMe">🧙‍♂️</span><span id="cbFoe">👺</span></div>
+        <div id="cbTrack"><div id="cbFill2"></div></div>
+        <div class="cbRow"><span id="cbPlayer"></span><span id="cbPHP"></span></div>
+        <div class="hpTrack"><div id="cbPFill" class="hpFill me"></div></div>
+        <div class="cbRow" style="margin-top:8px"><span id="cbMon"></span><span id="cbMHP"></span></div>
+        <div class="hpTrack"><div id="cbMFill" class="hpFill foe"></div></div>
+        <div class="cbFx" id="cbFx"></div>
+        <div style="margin-top:8px;text-align:right"><button class="btn small" onclick="stopAction()">🏃 Flee</button></div>
+      </div>
+      <div id="log"></div>
+      <div id="saveBox">
+        <textarea id="saveArea" readonly onclick="this.select()"></textarea>
+        <div class="invHint">Copy this code somewhere safe (a note, a text to Molly). Paste it on the title screen to restore both players.</div>
+      </div>
+      <div id="lanBox">
+        <div class="abLabel"><b style="color:var(--gold)">📡 Play together — live (same Wi-Fi works best)</b><span></span></div>
+        <div class="invHint" id="lanStatus">Whoever has the newest world <b>Hosts</b>; the other <b>Joins</b> their own copy of the game. You'll swap two codes by text once, then you're linked live — each playing your own character in one shared world.</div>
+        <div style="display:flex;gap:6px;margin:8px 0">
+          <button class="btn small" onclick="lanHost()">🏠 Host</button>
+          <button class="btn small" onclick="lanJoinPrompt()">🔗 Join</button>
+          <button class="btn small" onclick="lanDisconnect()">✖ Disconnect</button>
+        </div>
+        <textarea id="lanOut" readonly onclick="this.select()" placeholder="Your code appears here — copy & send it to your partner"></textarea>
+        <textarea id="lanIn" placeholder="Paste your partner's code here"></textarea>
+        <button class="btn small" style="margin-top:6px" onclick="lanSubmitIn()">✅ Apply pasted code</button>
+      </div>
+      <div id="chatRow">
+        <input id="chatInput" placeholder="Message your partner… (Enter to send)" onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="btn small" onclick="sendChat()">Send</button>
+      </div>
+    </div>
+
+    <!-- inventory / bank -->
+    <div class="panel">
+      <div class="invTabs">
+        <button class="tab active" id="tabInv" onclick="setInvView('inv')">🎒 Pack</button>
+        <button class="tab" id="tabBank" onclick="setInvView('bank')">🏦 Bank</button>
+        <button class="tab" id="tabGear" onclick="setInvView('gear')">🛡️ Gear</button>
+        <button class="tab" id="tabChest" onclick="setInvView('chest')">🎁 Chest</button>
+      </div>
+      <div class="invGrid" id="invGrid"></div>
+      <div class="invHint" id="invHint"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toastWrap" id="toasts"></div>
+
+<script>
+/* =====================================================================
+   EMBERVALE v0.1 — "The Gathering Age"
+   OSRS-style skilling & crafting slice. Classes/talents arrive in Ch. II.
+===================================================================== */
+
+/* ---------- OSRS experience table (levels 1–99) ---------- */
+const XP_TABLE = (() => {
+  const t = [0, 0]; // t[level] = xp required for that level
+  let pts = 0;
+  for (let lvl = 1; lvl < 99; lvl++) {
+    pts += Math.floor(lvl + 300 * Math.pow(2, lvl / 7));
+    t[lvl + 1] = Math.floor(pts / 4);
+  }
+  return t;
+})();
+function levelFor(xp) {
+  let lvl = 1;
+  for (let i = 2; i <= 99; i++) { if (xp >= XP_TABLE[i]) lvl = i; else break; }
+  return lvl;
+}
+function xpToNext(xp) {
+  const lvl = levelFor(xp);
+  if (lvl >= 99) return { pct: 1, need: 0 };
+  const lo = XP_TABLE[lvl], hi = XP_TABLE[lvl + 1];
+  return { pct: (xp - lo) / (hi - lo), need: hi - xp };
+}
+
+/* ---------- items ---------- */
+const ITEMS = {
+  logs:{n:'Logs',i:'🪵',v:8}, oak_logs:{n:'Oak logs',i:'🪵',v:20}, willow_logs:{n:'Willow logs',i:'🪵',v:40},
+  maple_logs:{n:'Maple logs',i:'🪵',v:70}, yew_logs:{n:'Yew logs',i:'🪵',v:160}, elder_logs:{n:'Elder logs',i:'🪵',v:300},
+  copper_ore:{n:'Copper ore',i:'🪨',v:10}, tin_ore:{n:'Tin ore',i:'🪨',v:10}, iron_ore:{n:'Iron ore',i:'🪨',v:25},
+  silver_ore:{n:'Silver ore',i:'🪨',v:60}, coal:{n:'Coal',i:'⚫',v:45}, gold_ore:{n:'Gold ore',i:'🪨',v:100},
+  mithril_ore:{n:'Mithril ore',i:'🪨',v:160}, adamantite_ore:{n:'Adamantite ore',i:'🪨',v:250}, runite_ore:{n:'Runite ore',i:'🪨',v:400},
+  raw_shrimp:{n:'Raw shrimp',i:'🦐',v:5}, raw_sardine:{n:'Raw sardine',i:'🐟',v:10}, raw_trout:{n:'Raw trout',i:'🐟',v:25},
+  raw_salmon:{n:'Raw salmon',i:'🐟',v:40}, raw_lobster:{n:'Raw lobster',i:'🦞',v:80}, raw_swordfish:{n:'Raw swordfish',i:'🐟',v:120},
+  raw_shark:{n:'Raw shark',i:'🦈',v:300},
+  shrimp:{n:'Shrimp',i:'🍤',v:8}, sardine:{n:'Sardine',i:'🍽️',v:15}, trout:{n:'Trout',i:'🍽️',v:40},
+  salmon:{n:'Salmon',i:'🍽️',v:65}, lobster:{n:'Lobster',i:'🍽️',v:130}, swordfish:{n:'Swordfish',i:'🍽️',v:190},
+  shark:{n:'Shark',i:'🍽️',v:500}, burnt_food:{n:'Burnt food',i:'🔥',v:1},
+  bronze_bar:{n:'Bronze bar',i:'🟫',v:25}, iron_bar:{n:'Iron bar',i:'⬜',v:50}, silver_bar:{n:'Silver bar',i:'⬜',v:90},
+  steel_bar:{n:'Steel bar',i:'⬜',v:130}, gold_bar:{n:'Gold bar',i:'🟨',v:150}, mithril_bar:{n:'Mithril bar',i:'🟦',v:350},
+  adamant_bar:{n:'Adamant bar',i:'🟩',v:550}, rune_bar:{n:'Rune bar',i:'🟦',v:900},
+  uncut_sapphire:{n:'Uncut sapphire',i:'💠',v:120}, uncut_emerald:{n:'Uncut emerald',i:'💠',v:200},
+  uncut_ruby:{n:'Uncut ruby',i:'💠',v:350}, uncut_diamond:{n:'Uncut diamond',i:'💠',v:700},
+  sapphire:{n:'Sapphire',i:'🔷',v:180}, emerald:{n:'Emerald',i:'🟢',v:300}, ruby:{n:'Ruby',i:'🔴',v:525}, diamond:{n:'Diamond',i:'💎',v:1050},
+  sapphire_ring:{n:'Sapphire ring',i:'💍',v:400}, emerald_ring:{n:'Emerald ring',i:'💍',v:550},
+  ruby_ring:{n:'Ruby ring',i:'💍',v:800}, diamond_ring:{n:'Diamond ring',i:'💍',v:1400},
+  sapphire_amulet:{n:'Sapphire amulet',i:'📿',v:450}, emerald_amulet:{n:'Emerald amulet',i:'📿',v:600},
+  ruby_amulet:{n:'Ruby amulet',i:'📿',v:900}, diamond_amulet:{n:'Diamond amulet',i:'📿',v:1550},
+};
+/* smithed gear is generated below and added to ITEMS */
+
+/* ---------- skills ---------- */
+const SKILLS = [
+  {id:'woodcutting', n:'Woodcutting', i:'🪓'},
+  {id:'mining',      n:'Mining',      i:'⛏️'},
+  {id:'fishing',     n:'Fishing',     i:'🎣'},
+  {id:'smithing',    n:'Smithing',    i:'🔨'},
+  {id:'cooking',     n:'Cooking',     i:'🍳'},
+  {id:'crafting',    n:'Crafting',    i:'✂️'},
+  {id:'attack',      n:'Attack',      i:'⚔️'},
+  {id:'strength',    n:'Strength',    i:'💪'},
+  {id:'defence',     n:'Defence',     i:'🛡️'},
+  {id:'magic',       n:'Magic',       i:'🔮'},
+  {id:'ranged',      n:'Ranged',      i:'🏹'},
+  {id:'hitpoints',   n:'Hitpoints',   i:'❤️'},
+];
+const COMBAT_SKILLS = ['attack','strength','defence','magic','ranged','hitpoints'];
+
+/* ---------- gathering data ---------- */
+const TREES = [
+  {id:'tree',n:'Tree',lvl:1,xp:25,item:'logs',time:2.4},
+  {id:'oak',n:'Oak',lvl:15,xp:38,item:'oak_logs',time:3.0},
+  {id:'willow',n:'Willow',lvl:30,xp:68,item:'willow_logs',time:3.4},
+  {id:'maple',n:'Maple',lvl:45,xp:100,item:'maple_logs',time:4.0},
+  {id:'yew',n:'Yew',lvl:60,xp:175,item:'yew_logs',time:4.8},
+  {id:'elder',n:'Elder tree',lvl:75,xp:250,item:'elder_logs',time:5.6},
+];
+const ROCKS = [
+  {id:'copper',n:'Copper rock',lvl:1,xp:18,item:'copper_ore',time:2.4},
+  {id:'tin',n:'Tin rock',lvl:1,xp:18,item:'tin_ore',time:2.4},
+  {id:'iron',n:'Iron rock',lvl:15,xp:35,item:'iron_ore',time:2.8},
+  {id:'silver',n:'Silver rock',lvl:20,xp:40,item:'silver_ore',time:3.0},
+  {id:'coalr',n:'Coal seam',lvl:30,xp:50,item:'coal',time:3.2},
+  {id:'goldr',n:'Gold rock',lvl:40,xp:65,item:'gold_ore',time:3.6},
+  {id:'mith',n:'Mithril rock',lvl:55,xp:80,item:'mithril_ore',time:4.2},
+  {id:'adam',n:'Adamantite rock',lvl:70,xp:95,item:'adamantite_ore',time:5.0},
+  {id:'rune',n:'Runite rock',lvl:85,xp:125,item:'runite_ore',time:6.0},
+];
+const SPOTS = [
+  {id:'shrimp',n:'Shrimp pool',lvl:1,xp:10,item:'raw_shrimp',time:2.2},
+  {id:'sardine',n:'Sardine shoal',lvl:5,xp:20,item:'raw_sardine',time:2.4},
+  {id:'trout',n:'Trout run',lvl:20,xp:50,item:'raw_trout',time:2.8},
+  {id:'salmon',n:'Salmon run',lvl:30,xp:70,item:'raw_salmon',time:3.0},
+  {id:'lobster',n:'Lobster cage',lvl:40,xp:90,item:'raw_lobster',time:3.6},
+  {id:'sword',n:'Swordfish deeps',lvl:50,xp:100,item:'raw_swordfish',time:4.0},
+  {id:'shark',n:'Shark waters',lvl:76,xp:110,item:'raw_shark',time:5.0},
+];
+const GEMS = [
+  {item:'uncut_sapphire',w:45},{item:'uncut_emerald',w:30},{item:'uncut_ruby',w:20},{item:'uncut_diamond',w:5}
+];
+const GEM_CHANCE = 0.02;
+
+/* ---------- smelting ---------- */
+const SMELTS = [
+  {id:'bronze_bar',lvl:1,xp:6,inp:{copper_ore:1,tin_ore:1}},
+  {id:'iron_bar',lvl:15,xp:12,inp:{iron_ore:1}},
+  {id:'silver_bar',lvl:20,xp:14,inp:{silver_ore:1}},
+  {id:'steel_bar',lvl:30,xp:17,inp:{iron_ore:1,coal:2}},
+  {id:'gold_bar',lvl:40,xp:22,inp:{gold_ore:1}},
+  {id:'mithril_bar',lvl:55,xp:30,inp:{mithril_ore:1,coal:4}},
+  {id:'adamant_bar',lvl:70,xp:37,inp:{adamantite_ore:1,coal:6}},
+  {id:'rune_bar',lvl:85,xp:50,inp:{runite_ore:1,coal:8}},
+];
+
+/* ---------- smithed gear (generated) ---------- */
+const METALS = [
+  {id:'bronze',n:'Bronze',bar:'bronze_bar',base:1,xpPerBar:13},
+  {id:'iron',n:'Iron',bar:'iron_bar',base:15,xpPerBar:25},
+  {id:'steel',n:'Steel',bar:'steel_bar',base:30,xpPerBar:38},
+  {id:'mithril',n:'Mithril',bar:'mithril_bar',base:55,xpPerBar:50},
+  {id:'adamant',n:'Adamant',bar:'adamant_bar',base:70,xpPerBar:63},
+  {id:'rune',n:'Rune',bar:'rune_bar',base:85,xpPerBar:75},
+];
+const GEAR_SHAPES = [
+  {id:'dagger',n:'dagger',i:'🗡️',off:0,bars:1},
+  {id:'sword',n:'sword',i:'⚔️',off:4,bars:1},
+  {id:'scimitar',n:'scimitar',i:'⚔️',off:5,bars:2},
+  {id:'full_helm',n:'full helm',i:'🪖',off:7,bars:2},
+  {id:'platelegs',n:'platelegs',i:'🦵',off:16,bars:3},
+  {id:'platebody',n:'platebody',i:'🛡️',off:18,bars:5},
+];
+const SMITHS = [];
+for (const m of METALS) for (const g of GEAR_SHAPES) {
+  const id = m.id + '_' + g.id;
+  const barVal = ITEMS[m.bar].v;
+  ITEMS[id] = {n:`${m.n} ${g.n}`, i:g.i, v:Math.round(g.bars * barVal * 1.2)};
+  SMITHS.push({id, lvl:Math.min(99, m.base + g.off), xp:g.bars * m.xpPerBar, inp:{[m.bar]:g.bars}, metal:m.id});
+}
+
+/* ---------- cooking ---------- */
+const COOKS = [
+  {id:'shrimp',lvl:1,xp:30,inp:{raw_shrimp:1},stop:34},
+  {id:'sardine',lvl:5,xp:40,inp:{raw_sardine:1},stop:38},
+  {id:'trout',lvl:20,xp:70,inp:{raw_trout:1},stop:50},
+  {id:'salmon',lvl:30,xp:90,inp:{raw_salmon:1},stop:58},
+  {id:'lobster',lvl:40,xp:120,inp:{raw_lobster:1},stop:74},
+  {id:'swordfish',lvl:50,xp:140,inp:{raw_swordfish:1},stop:86},
+  {id:'shark',lvl:80,xp:210,inp:{raw_shark:1},stop:99},
+];
+
+/* ---------- crafting ---------- */
+const CRAFTS = [
+  {id:'sapphire',lvl:20,xp:50,inp:{uncut_sapphire:1}},
+  {id:'emerald',lvl:27,xp:68,inp:{uncut_emerald:1}},
+  {id:'ruby',lvl:34,xp:85,inp:{uncut_ruby:1}},
+  {id:'diamond',lvl:43,xp:108,inp:{uncut_diamond:1}},
+  {id:'sapphire_ring',lvl:20,xp:40,inp:{gold_bar:1,sapphire:1}},
+  {id:'emerald_ring',lvl:27,xp:55,inp:{gold_bar:1,emerald:1}},
+  {id:'ruby_ring',lvl:34,xp:70,inp:{gold_bar:1,ruby:1}},
+  {id:'diamond_ring',lvl:43,xp:85,inp:{gold_bar:1,diamond:1}},
+  {id:'sapphire_amulet',lvl:24,xp:65,inp:{gold_bar:1,sapphire:1}},
+  {id:'emerald_amulet',lvl:31,xp:70,inp:{gold_bar:1,emerald:1}},
+  {id:'ruby_amulet',lvl:50,xp:85,inp:{gold_bar:1,ruby:1}},
+  {id:'diamond_amulet',lvl:70,xp:100,inp:{gold_bar:1,diamond:1}},
+];
+
+/* =====================================================================
+   CHAPTER II — COMBAT & CLASSES
+===================================================================== */
+const FOOD = {shrimp:3,sardine:4,trout:7,salmon:9,lobster:12,swordfish:14,shark:20};
+const TIER_POW = [5,10,16,24,33,45];
+
+/* ---- crafted weapons: staves (magic) & bows (ranged) ---- */
+const WOOD_TIERS = [
+  {wood:'logs',        wn:'',          lvl:1,  tier:0, xp:15},
+  {wood:'oak_logs',    wn:'Oak ',      lvl:15, tier:1, xp:30},
+  {wood:'willow_logs', wn:'Willow ',   lvl:30, tier:2, xp:55},
+  {wood:'maple_logs',  wn:'Maple ',    lvl:45, tier:3, xp:80},
+  {wood:'yew_logs',    wn:'Yew ',      lvl:60, tier:4, xp:120},
+  {wood:'elder_logs',  wn:'Elder ',    lvl:75, tier:5, xp:160},
+];
+const EQUIP = {}; // itemId -> {slot, pow, cls, req, reqSkill}
+for (const w of WOOD_TIERS){
+  const sid = w.tier===0 ? 'apprentice_staff' : w.wood.replace('_logs','')+'_staff';
+  const bid = w.tier===0 ? 'shortbow' : w.wood.replace('_logs','')+'_bow';
+  const sname = w.tier===0 ? 'Apprentice staff' : w.wn+'staff';
+  const bname = w.tier===0 ? 'Shortbow' : w.wn+'bow';
+  const val = Math.round(ITEMS[w.wood].v * 2.6);
+  ITEMS[sid] = {n:sname, i:'🪄', v:val};
+  ITEMS[bid] = {n:bname, i:'🏹', v:val};
+  CRAFTS.push({id:sid, lvl:w.lvl, xp:w.xp, inp:{[w.wood]:2}});
+  CRAFTS.push({id:bid, lvl:w.lvl, xp:w.xp, inp:{[w.wood]:2}});
+  EQUIP[sid] = {slot:'weapon', pow:TIER_POW[w.tier], cls:'magic',  req:w.lvl, reqSkill:'magic',  tier:w.tier};
+  EQUIP[bid] = {slot:'weapon', pow:TIER_POW[w.tier], cls:'ranged', req:w.lvl, reqSkill:'ranged', tier:w.tier};
+}
+/* smithed gear becomes equippable */
+const SHAPE_META = {
+  dagger:{slot:'weapon',mult:0.8}, sword:{slot:'weapon',mult:1.0}, scimitar:{slot:'weapon',mult:1.1},
+  full_helm:{slot:'helm',mult:0.35}, platelegs:{slot:'legs',mult:0.45}, platebody:{slot:'body',mult:0.6},
+};
+METALS.forEach((m, ti) => {
+  for (const [shape, meta] of Object.entries(SHAPE_META)){
+    EQUIP[m.id+'_'+shape] = {
+      slot:meta.slot, pow:Math.max(1, Math.round(TIER_POW[ti]*meta.mult)),
+      cls: meta.slot==='weapon' ? 'melee' : 'any',
+      req:m.base, reqSkill: meta.slot==='weapon' ? 'attack' : 'defence', tier:ti,
+    };
+  }
+});
+
+/* ---- classes ---- */
+const HOOK_DESC = {
+  dmg:'+{v}% damage', acc:'+{v}% accuracy', def:'+{v}% defence', maxhp:'+{v}% max HP',
+  crit:'+{v}% crit chance', lifesteal:'heal {v}% of damage dealt', foodheal:'food heals {v}% more',
+  gold:'+{v}% gold from kills', xpboost:'+{v}% combat xp', cdr:'ability cooldowns −{v} round',
+  abilitypow:'abilities {v}% stronger',
+};
+function T(n, hook, per, max){ return {n, hook, per, max}; }
+/* Each class: 3 base abilities + TWO specialization routes.
+   Each route: 8 talents (4 tiers × 2, tier N needs 2(N−1) pts in that route)
+   + 2 route abilities that UNLOCK at 4 and 10 points invested in that route. */
+const CLASSES = {
+  princess:{n:'Galactic Princess', i:'👑', style:'magic',
+    flavor:'Sovereign of the star-seas. Smites with falling stars and mends wounds with nebula light.',
+    abilities:[
+      {id:'smite', n:'Starfall Smite', i:'🌠', cd:5, d:'Calls down a falling star for 250% damage.'},
+      {id:'renew', n:'Nebula Renewal', i:'🌌', cd:8, d:'Below 40% HP: stardust heals 30% of max HP.'},
+      {id:'crown', n:'Crown of Cosmos', i:'✨', cd:10, d:'+25% damage for 4 rounds while the crown blazes.'},
+    ],
+    branches:[
+      {id:'solar', n:'Solar', i:'☀️', theme:'The wrathful light of a queen at war.',
+        talents:[
+          T('Burning Radiance','dmg',5,2), T('Solar Vigor','maxhp',5,2),
+          T('Flare Precision','acc',4,2), T('Radiant Power','abilitypow',8,2),
+          T('Golden Dawn','gold',10,2), T('Starlit Insight','xpboost',6,2),
+          T('Sunqueen','dmg',12,1), T('Corona Blessing','crit',8,1)],
+        abilities:[
+          {id:'flare', n:'Solar Flare', i:'🌞', at:4, cd:6, d:'A lance of sunfire — 280% damage plus a 3-round burn.'},
+          {id:'corona', n:'Crown Corona', i:'💛', at:10, passive:true, d:'Starfall Smite strikes harder (310%) and recharges 1 round faster.'}]},
+      {id:'lunar', n:'Lunar', i:'🌙', theme:'The patient tide of moonlight that outlasts every storm.',
+        talents:[
+          T('Moonlit Grace','def',5,2), T('Nightsea Vitality','maxhp',5,2),
+          T('Tidal Mending','abilitypow',8,2), T('Silver Precision','acc',4,2),
+          T('Dream Harvest','lifesteal',3,2), T('Lunar Study','xpboost',6,2),
+          T('Moon Sovereign','maxhp',12,1), T('Starlight Ward','def',10,1)],
+        abilities:[
+          {id:'moonwell', n:'Moonwell', i:'🌊', at:4, cd:9, d:'Below 70% HP: bathe in moonlight, healing 45% of max HP.'},
+          {id:'eclipse', n:'Eclipse Ward', i:'🌑', at:10, passive:true, d:'The eclipse shields you — all damage taken reduced by 12%.'}]},
+    ]},
+  warlock:{n:'Warlock', i:'😈', style:'magic',
+    flavor:'Pact-bound and patient. Curses fester while an imp cackles at your side.',
+    abilities:[
+      {id:'drain', n:'Drain Life', i:'🩸', cd:4, d:'120% damage, and you heal for every point dealt.'},
+      {id:'curse', n:'Curse of Embers', i:'🕯️', cd:6, d:'The target burns for 40% damage per round, 5 rounds.'},
+      {id:'imp', n:'Imp Familiar', i:'👿', cd:0, passive:true, d:'An imp fights beside you, adding 30% damage every round.'},
+    ],
+    branches:[
+      {id:'affliction', n:'Affliction', i:'🕯️', theme:'Let them rot. Every curse a slow-closing fist.',
+        talents:[
+          T('Withering Focus','dmg',5,2), T('Fel Vitality','maxhp',5,2),
+          T('Creeping Dread','abilitypow',8,2), T('Dark Precision','acc',4,2),
+          T('Soul Tax','gold',10,2), T('Forbidden Texts','xpboost',6,2),
+          T('Plaguelord','dmg',12,1), T('Wicked Fate','crit',8,1)],
+        abilities:[
+          {id:'unstable', n:'Unstable Affliction', i:'☠️', at:4, cd:7, d:'Detonate your active curses — each instantly deals 2 rounds of damage.'},
+          {id:'haunt', n:'Haunt', i:'👁️', at:10, passive:true, d:'Your damage-over-time effects deal 30% more damage.'}]},
+      {id:'demonology', n:'Demonology', i:'👿', theme:'Why fight alone? The pit answers those who feed it.',
+        talents:[
+          T('Demon Skin','def',5,2), T('Pit Vitality','maxhp',5,2),
+          T('Master Summoner','abilitypow',8,2), T('Fel Aim','acc',4,2),
+          T('Siphoned Souls','lifesteal',3,2), T('Pact Wisdom','xpboost',6,2),
+          T('Archdemon','maxhp',12,1), T('Iron Pact','def',10,1)],
+        abilities:[
+          {id:'felguard', n:'Felguard', i:'⚔️', at:4, passive:true, d:'Your imp grows into a Felguard — companion hits deal 55% damage instead of 30%.'},
+          {id:'pact', n:'Demonic Pact', i:'🩸', at:10, passive:true, d:'Your demon\'s strikes heal you for half the damage they deal.'}]},
+    ]},
+  mage:{n:'Mage', i:'🧙', style:'magic',
+    flavor:'Master of the elements — fire for ruin, frost for control.',
+    abilities:[
+      {id:'fireball', n:'Fireball', i:'🔥', cd:4, d:'200% damage, and the target burns for 3 rounds.'},
+      {id:'nova', n:'Frost Nova', i:'❄️', cd:8, d:'Freezes the enemy solid for 2 rounds.'},
+      {id:'surge', n:'Arcane Surge', i:'💫', cd:10, d:'+40% damage for 3 rounds.'},
+    ],
+    branches:[
+      {id:'fire', n:'Fire', i:'🔥', theme:'Everything burns. It is only a question of how fast.',
+        talents:[
+          T('Ignition','dmg',5,2), T('Cauterize','maxhp',5,2),
+          T('Pyromania','abilitypow',8,2), T('Heat Seeking','acc',4,2),
+          T('Molten Gold','gold',10,2), T('Ashen Study','xpboost',6,2),
+          T('Sunfury','dmg',12,1), T('Critical Mass','crit',8,1)],
+        abilities:[
+          {id:'combust', n:'Combustion', i:'💥', at:4, cd:6, d:'Ignite the very air — 280% damage plus a heavy 3-round burn.'},
+          {id:'living_flame', n:'Living Flame', i:'🕯️', at:10, passive:true, d:'Every basic attack sets the enemy burning for 2 rounds.'}]},
+      {id:'frost', n:'Frost', i:'❄️', theme:'Cold is patient. Cold always wins.',
+        talents:[
+          T('Ice Barrier','def',5,2), T('Winter Vitality','maxhp',5,2),
+          T('Deep Freeze','abilitypow',8,2), T('Crystal Focus','acc',4,2),
+          T('Frozen Assets','gold',10,2), T('Glacial Study','xpboost',6,2),
+          T('Winter\'s Heart','maxhp',12,1), T('Shatter','crit',8,1)],
+        abilities:[
+          {id:'icicles', n:'Icicle Barrage', i:'🧊', at:4, cd:5, d:'Three icicles at 80% damage each.'},
+          {id:'permafrost', n:'Permafrost', i:'🌨️', at:10, passive:true, d:'Frost Nova freezes 3 rounds and recharges faster; any round may flash-freeze the enemy.'}]},
+    ]},
+  hunter:{n:'Hunter', i:'🏹', style:'ranged',
+    flavor:'The wilds answer your call. A loyal wolf hunts beside your bow.',
+    abilities:[
+      {id:'aimed', n:'Precise Shot', i:'🎯', cd:4, d:'A guaranteed hit for 200% damage.'},
+      {id:'pet', n:'Wolf Companion', i:'🐺', cd:0, passive:true, d:'Your wolf strikes for 30% damage every round.'},
+      {id:'trap', n:'Explosive Trap', i:'💥', cd:0, opener:true, d:'Every fight opens with the enemy in your trap — 150% damage.'},
+    ],
+    branches:[
+      {id:'beastmastery', n:'Beast Mastery', i:'🐺', theme:'You do not command the pack. You lead it.',
+        talents:[
+          T('Pack Leader','dmg',5,2), T('Survivalist','maxhp',5,2),
+          T('Wild Bond','abilitypow',8,2), T('Keen Senses','acc',4,2),
+          T('Scavenger','gold',10,2), T('Trail Wisdom','xpboost',6,2),
+          T('Beast Lord','dmg',12,1), T('Thick Hide','def',10,1)],
+        abilities:[
+          {id:'wrath', n:'Bestial Wrath', i:'😤', at:4, cd:8, d:'Your beasts frenzy — companion hits are tripled for 2 rounds.'},
+          {id:'alpha', n:'Alpha of the Pack', i:'🐾', at:10, passive:true, d:'A second wolf joins you — your companions strike twice every round.'}]},
+      {id:'marksman', n:'Marksmanship', i:'🎯', theme:'One arrow, one answer.',
+        talents:[
+          T('Steady Hand','acc',4,2), T('Field Rations','foodheal',10,2),
+          T('Sharpshooter','dmg',5,2), T('Deadly Aim','abilitypow',8,2),
+          T('Bounty Hunter','gold',10,2), T('Hawkeye Study','xpboost',6,2),
+          T('Headshot','crit',8,1), T('Windrunner','dmg',12,1)],
+        abilities:[
+          {id:'multishot', n:'Multi-Shot', i:'🏹', at:4, cd:5, d:'Loose two arrows at 120% damage each.'},
+          {id:'sniper', n:'Sniper\'s Focus', i:'🔭', at:10, passive:true, d:'+10% crit chance, and your critical hits deal 175% instead of 150%.'}]},
+    ]},
+  rogue:{n:'Rogue', i:'🗡️', style:'melee',
+    flavor:"Strike first, strike deep, vanish. What poison doesn't finish, the blade will.",
+    abilities:[
+      {id:'backstab', n:'Backstab', i:'🔪', cd:0, opener:true, d:'Every fight opens from the shadows — 250% damage.'},
+      {id:'poison', n:'Poison Blade', i:'🧪', cd:6, d:'Poison deals 30% damage per round for 5 rounds.'},
+      {id:'evasion', n:'Evasion', i:'💨', cd:8, d:'Below 35% HP: dodge everything for 2 rounds.'},
+    ],
+    branches:[
+      {id:'assassination', n:'Assassination', i:'☠️', theme:'The blade is honest. The poison is thorough.',
+        talents:[
+          T('Deadly Blades','dmg',5,2), T('Tough as Leather','maxhp',5,2),
+          T('Vile Poisons','abilitypow',8,2), T('Pinpoint','acc',4,2),
+          T('Pickpocket','gold',10,2), T('Cutthroat Cunning','xpboost',6,2),
+          T('Master Assassin','dmg',12,1), T('Seal Fate','crit',8,1)],
+        abilities:[
+          {id:'envenom', n:'Envenom', i:'💉', at:4, cd:6, d:'200% damage — 300% if your poison is coursing through them.'},
+          {id:'toxic', n:'Toxic Cascade', i:'🧬', at:10, passive:true, d:'Poisons hit 40% harder and two doses can fester at once.'}]},
+      {id:'subtlety', n:'Subtlety', i:'🌒', theme:'They cannot kill what they cannot find.',
+        talents:[
+          T('Nimble Footwork','def',5,2), T('Shadow Vitality','maxhp',5,2),
+          T('Dark Arts','abilitypow',8,2), T('Night Vision','acc',4,2),
+          T('Leeching Shadows','lifesteal',3,2), T('Silent Study','xpboost',6,2),
+          T('Cheat Death','maxhp',12,1), T('Phantom','def',10,1)],
+        abilities:[
+          {id:'shadowdance', n:'Shadow Dance', i:'🌫️', at:4, cd:9, d:'Vanish mid-fight and backstab again — 250% guaranteed damage.'},
+          {id:'ghost', n:'Ghost Walk', i:'👤', at:10, passive:true, d:'You are half-shadow — 15% chance to simply not be where any blow lands.'}]},
+    ]},
+  paladin:{n:'Paladin', i:'🛡️', style:'melee',
+    flavor:'A bulwark of holy light — hard to kill, harder to ignore.',
+    abilities:[
+      {id:'holystrike', n:'Holy Strike', i:'⚜️', cd:4, d:'180% damage, and you heal 10% of max HP.'},
+      {id:'shield', n:'Divine Shield', i:'🛡️', cd:10, d:'Below 30% HP: immune to all damage for 2 rounds.'},
+      {id:'layhands', n:'Lay on Hands', i:'🙌', cd:0, oncePerFight:true, d:'Below 15% HP: heal to full. Once per fight.'},
+    ],
+    branches:[
+      {id:'crusader', n:'Crusader', i:'⚔️', theme:'The light does not negotiate.',
+        talents:[
+          T('Crusader\'s Might','dmg',5,2), T('Sacred Health','maxhp',5,2),
+          T('Holy Power','abilitypow',8,2), T('True Strike','acc',4,2),
+          T('Tithe','gold',10,2), T('Book of War','xpboost',6,2),
+          T('Highlord','dmg',12,1), T('Righteous Verdict','crit',8,1)],
+        abilities:[
+          {id:'wrathlight', n:'Wrath of the Light', i:'⚡', at:4, cd:6, d:'240% holy damage, and you heal 8% of max HP.'},
+          {id:'zeal', n:'Zealotry', i:'🔱', at:10, passive:true, d:'Holy Strike hits a second time at 60% damage.'}]},
+      {id:'guardian', n:'Guardian', i:'✨', theme:'Stand behind me.',
+        talents:[
+          T('Devotion Aura','def',5,2), T('Fortress Vitality','maxhp',5,2),
+          T('Blessed Mending','abilitypow',8,2), T('Vigilance','acc',4,2),
+          T('Blessed Recovery','foodheal',10,2), T('Book of Light','xpboost',6,2),
+          T('Guardian\'s Favor','def',12,1), T('Eternal Bulwark','maxhp',12,1)],
+        abilities:[
+          {id:'sanctuary', n:'Sanctuary', i:'🕊️', at:4, passive:true, d:'Holy ground follows you — heal 3% of max HP every combat round.'},
+          {id:'aegis', n:'Aegis of Dawn', i:'🌅', at:10, passive:true, d:'All damage taken reduced by 12%.'}]},
+    ]},
+};
+
+/* ---- rare essences & reinforcement ---- */
+ITEMS.emberstone     = {n:'Emberstone',      i:'🔶', v:750};
+ITEMS.wispwood_heart = {n:'Wispwood heart',  i:'🌳', v:750};
+ITEMS.tide_pearl     = {n:'Tideglass pearl', i:'🫧', v:600};
+const RARE_BY_LOC = {woods:'wispwood_heart', mine:'emberstone', river:'tide_pearl'};
+function rareChance(tierIdx){ return 0.008 + tierIdx * 0.004; }
+
+/* reinforced equipment variants: +35% power plus a slot buff */
+const SLOT_BONUS = {weapon:{hook:'dmg',v:8}, helm:{hook:'acc',v:6}, body:{hook:'maxhp',v:8}, legs:{hook:'def',v:6}};
+for (const [id, eq] of Object.entries({...EQUIP})){
+  const rid = 'r_' + id;
+  let prefix = 'Ember', mat = 'emberstone', bonus = {...SLOT_BONUS[eq.slot]};
+  if (eq.cls === 'magic'){ prefix = 'Starwood'; mat = 'wispwood_heart'; bonus = {hook:'abilitypow', v:8}; }
+  if (eq.cls === 'ranged'){ prefix = 'Wildwood'; mat = 'wispwood_heart'; bonus = {hook:'crit', v:6}; }
+  ITEMS[rid] = {n:prefix+' '+ITEMS[id].n.toLowerCase(), i:'✨', v:ITEMS[id].v*2};
+  EQUIP[rid] = {...eq, pow:Math.round(eq.pow*1.35), bonus, base:id, mat};
+}
+/* hearty food: heals 60% more and grants +10% damage for 10 rounds */
+for (const [fid, heal] of Object.entries({...FOOD})){
+  ITEMS['r_'+fid] = {n:'Hearty '+ITEMS[fid].n.toLowerCase(), i:'🍲', v:ITEMS[fid].v*2};
+  FOOD['r_'+fid] = Math.round(heal*1.6);
+}
+const HEARTY_BUFF = {mult:10, rounds:10};
+function reinforceCost(id){
+  const eq = EQUIP['r_'+id];
+  if (eq) return {mat:eq.mat, qty:1 + Math.floor((eq.tier||0)/2)};
+  if (FOOD[id] && !id.startsWith('r_')) return {mat:'tide_pearl', qty:1};
+  return null;
+}
+
+/* ---- monsters ---- */
+const MONSTERS = [
+  {id:'chicken',n:'Chicken',i:'🐔',hp:5,atk:1,def:1,mh:1,gold:[1,4],loot:[]},
+  {id:'rat',n:'Giant Rat',i:'🐀',hp:9,atk:4,def:3,mh:2,gold:[3,8],loot:[]},
+  {id:'goblin',n:'Goblin',i:'👺',hp:16,atk:8,def:6,mh:3,gold:[8,20],loot:[['copper_ore',.12],['tin_ore',.12]],den:'Goblin Camp',tier:0},
+  {id:'wolf',n:'Dire Wolf',i:'🐺',hp:26,atk:14,def:10,mh:5,gold:[15,35],loot:[['raw_trout',.15]],den:'Wolf Den',tier:0},
+  {id:'skeleton',n:'Skeleton',i:'💀',hp:38,atk:22,def:18,mh:7,gold:[25,60],loot:[['iron_ore',.15]],den:'Barrow Crypt',tier:1},
+  {id:'bandit',n:'Bandit',i:'🥷',hp:55,atk:32,def:27,mh:9,gold:[40,95],loot:[['gold_ore',.08],['uncut_sapphire',.05]],den:'Bandit Hideout',tier:2},
+  {id:'ogre',n:'Ogre',i:'👹',hp:80,atk:44,def:38,mh:12,gold:[70,150],loot:[['coal',.2],['uncut_emerald',.04]],den:'Ogre Stronghold',tier:2},
+  {id:'troll',n:'Ice Troll',i:'🧌',hp:110,atk:58,def:52,mh:16,gold:[120,250],loot:[['mithril_ore',.12],['uncut_ruby',.04]],den:'Frost Cavern',tier:3},
+  {id:'drake',n:'Fire Drake',i:'🐉',hp:150,atk:72,def:66,mh:21,gold:[200,420],loot:[['adamantite_ore',.1],['raw_shark',.15]],den:'Drake Roost',tier:4},
+  {id:'wraith',n:'Void Wraith',i:'👻',hp:190,atk:86,def:82,mh:26,gold:[320,650],loot:[['runite_ore',.08],['uncut_diamond',.04]],den:'Void Rift',tier:5},
+  {id:'dragon',n:'Ember Dragon',i:'🔥',hp:320,atk:99,def:92,mh:34,gold:[800,1600],loot:[['runite_ore',.3],['uncut_diamond',.12]],boss:true,den:'Dragon Hoard',tier:5},
+];
+const RAID_KILLS = 12;   // kills of a monster type to reveal its den
+const GEM_POOL = ['uncut_sapphire','uncut_emerald','uncut_ruby','uncut_diamond'];
+const ESSENCES = ['emberstone','wispwood_heart','tide_pearl'];
+
+/* ---------- locations ---------- */
+const LOCATIONS = [
+  {id:'woods', n:'🌲 Emberwood', desc:'Ancient timber creaks in the wind. Bring your axe.', skill:'woodcutting', kind:'gather', data:TREES},
+  {id:'mine', n:'⛰️ Duskrock Mine', desc:'Veins of ore glitter in the torchlight. Rumor says gems hide here too.', skill:'mining', kind:'gather', data:ROCKS},
+  {id:'river', n:'🌊 Silverfin River', desc:'The water runs cold and generous.', skill:'fishing', kind:'gather', data:SPOTS},
+  {id:'forge', n:'🔥 The Forge', desc:'Smelt ores into bars.', skill:'smithing', kind:'process', data:SMELTS},
+  {id:'anvil', n:'🔨 The Anvil', desc:'Hammer bars into weapons and armour — ready for when the fighting starts in Chapter II.', skill:'smithing', kind:'process', data:SMITHS},
+  {id:'kitchen', n:'🍳 The Hearth', desc:'Cook your catch. Mind the flames — food burns until you master it.', skill:'cooking', kind:'cook', data:COOKS},
+  {id:'workshop', n:'✂️ The Workshop', desc:'Cut gems, set them in gold, and carve staves & bows from timber.', skill:'crafting', kind:'process', data:CRAFTS},
+  {id:'enchanter', n:'🔮 The Enchanter', desc:'Rare essences from the wilds — Emberstone, Wispwood hearts, Tideglass pearls — can reinforce your gear and food with lasting power.', skill:'crafting', kind:'reinforce'},
+  {id:'classhall', n:'⚜️ Class Hall', desc:'Choose your calling, study your abilities, and spend talent points.', kind:'classhall'},
+  {id:'wilds', n:'⚔️ The Wilds', desc:'Monsters roam beyond the palisade. Choose a class first — and bring food.', kind:'wilds'},
+  {id:'emberhold', n:'🏙️ Emberhold', kind:'city',
+    desc:'The capital. Forges roar day and night, and the taverns never close. Vendors restock every hour.',
+    vendors:[
+      {id:'smithy', n:'Smithy Surplus', i:'⚒️', pool:[
+        ['copper_ore',10,25,1],['tin_ore',10,25,1],['iron_ore',8,20,1],['coal',10,30,1],
+        ['silver_ore',4,10,.8],['gold_ore',3,8,.7],['mithril_ore',2,6,.5],['adamantite_ore',1,4,.35],['runite_ore',1,2,.2],
+        ['bronze_bar',4,10,1],['iron_bar',3,8,.8],['steel_bar',2,6,.6]]},
+      {id:'ladle', n:'The Golden Ladle', i:'🥣', pool:[
+        ['shrimp',10,25,1],['sardine',10,20,1],['trout',8,18,1],['salmon',6,12,.8],
+        ['lobster',4,10,.7],['swordfish',3,8,.5],['shark',1,4,.3]]},
+    ]},
+  {id:'tidewatch', n:'⚓ Tidewatch', kind:'city',
+    desc:'A salt-stained port town where strange things wash ashore. Vendors restock every hour.',
+    vendors:[
+      {id:'coop', n:"Fisherman's Co-op", i:'🐟', pool:[
+        ['raw_shrimp',15,30,1],['raw_sardine',12,24,1],['raw_trout',10,20,1],['raw_salmon',8,16,.8],
+        ['raw_lobster',5,12,.7],['raw_swordfish',4,8,.5],['raw_shark',2,5,.35]]},
+      {id:'curio', n:'Curio Cabinet', i:'🗝️', pool:[
+        ['uncut_sapphire',2,5,.8],['uncut_emerald',1,4,.6],['uncut_ruby',1,3,.45],['uncut_diamond',1,2,.25],
+        ['gold_bar',3,8,.8],['sapphire_ring',1,2,.4],['emerald_amulet',1,1,.3],
+        ['emberstone',1,1,.15],['wispwood_heart',1,1,.15],['tide_pearl',1,1,.2]]},
+    ]},
+];
+
+/* ---------- state ---------- */
+function newPlayer(name){
+  const xp = {}; SKILLS.forEach(s => xp[s.id] = s.id==='hitpoints' ? 1154 : 0);
+  return {name, xp, inv:{}, bank:{}, gold:25, class:null, hp:10,
+          gear:{weapon:null, helm:null, body:null, legs:null}, talents:{0:{},1:{}}, kills:{}, raids:{}};
+}
+function migratePlayer(p, name){
+  const np = newPlayer(name);
+  for (const k of Object.keys(np)) if (p[k] === undefined) p[k] = np[k];
+  SKILLS.forEach(s => { if (p.xp[s.id] === undefined) p.xp[s.id] = s.id==='hitpoints' ? 1154 : 0; });
+  if (typeof p.hp !== 'number') p.hp = levelFor(p.xp.hitpoints);
+  /* old flat talent format (pre-specialization) → reset into two route buckets */
+  if (!p.talents || typeof p.talents[0] !== 'object' || p.talents[0] === null) p.talents = {0:{},1:{}};
+  else { p.talents[0] = p.talents[0]||{}; p.talents[1] = p.talents[1]||{}; }
+  return p;
+}
+let state = { players: { k:newPlayer('k'), molly:newPlayer('Molly') }, chest:{gold:0, items:{}}, vendorStock:null, vendorRestockAt:0 };
+function migrateState(st){
+  migratePlayer(st.players.k, 'k');
+  migratePlayer(st.players.molly, 'Molly');
+  if (!st.chest) st.chest = {gold:0, items:{}};
+  if (st.vendorRestockAt === undefined){ st.vendorStock = null; st.vendorRestockAt = 0; }
+  return st;
+}
+let activeId = null;
+let currentLoc = 'woods';
+let invView = 'inv';
+let action = null;   // {locId, entry, elapsed}
+let tickTimer = null;
+
+const P = () => state.players[activeId];
+
+/* ---------- save / load ---------- */
+function encodeSave(){ return btoa(unescape(encodeURIComponent(JSON.stringify(state)))); }
+function decodeSave(code){ return JSON.parse(decodeURIComponent(escape(atob(code.trim())))); }
+function openSave(){
+  const box = document.getElementById('saveBox');
+  box.style.display = box.style.display === 'block' ? 'none' : 'block';
+  if (box.style.display === 'block'){
+    const area = document.getElementById('saveArea');
+    area.value = encodeSave();
+    area.select();
+    try { document.execCommand('copy'); toast('Save code copied to clipboard'); } catch(e){ toast('Select & copy the code below'); }
+  }
+}
+function loadFromInput(){
+  const code = document.getElementById('loadInput').value;
+  if (!code.trim()) { toast('Paste a save code first'); return; }
+  try {
+    const loaded = decodeSave(code);
+    if (!loaded.players || !loaded.players.k || !loaded.players.molly) throw new Error('bad');
+    state = migrateState(loaded);
+    toast('World restored! Pick a player.');
+    updateProfilePreviews();
+  } catch(e){ toast('That save code didn\'t work — check it and try again'); }
+}
+function totalLevel(p){ return SKILLS.reduce((a,s)=>a+levelFor(p.xp[s.id]),0); }
+function updateProfilePreviews(){
+  for (const id of ['k','molly']){
+    const p = state.players[id];
+    const tl = totalLevel(p);
+    const cls = p.class && CLASSES[p.class];
+    document.getElementById('prev-'+id).textContent =
+      tl <= 21 ? 'New adventurer' : `${cls ? cls.i+' '+cls.n+' · ' : ''}Total level ${tl} · ${p.gold.toLocaleString()} gp`;
+  }
+}
+
+/* ---------- game flow ---------- */
+let regenTimer = null;
+function startGame(id){
+  if (net.connected && net.remoteId === id){ toast(`${state.players[id].name} is being played by your partner!`); return; }
+  activeId = id;
+  migratePlayer(P(), id==='k' ? 'k' : 'Molly');
+  document.getElementById('profileScreen').style.display = 'none';
+  document.getElementById('game').style.display = 'block';
+  document.getElementById('hdrWho').textContent = (id==='k'?'🧙‍♂️':'🧝‍♀️') + ' ' + P().name;
+  log(`Welcome to Embervale, ${P().name}.` + (P().class ? '' : ' Visit the 🏰 Class Hall to choose your calling.'));
+  if (!regenTimer) regenTimer = setInterval(() => {
+    if (!activeId) return;
+    if (!combat && P().hp < maxHp()){ P().hp = Math.min(maxHp(), P().hp + 1); renderHeader(); }
+  }, 3000);
+  renderAll();
+}
+function switchPlayer(){
+  stopAction();
+  document.getElementById('game').style.display = 'none';
+  document.getElementById('profileScreen').style.display = 'flex';
+  document.getElementById('log').innerHTML = '';
+  updateProfilePreviews();
+}
+
+/* ---------- rendering ---------- */
+function renderAll(){ renderSkills(); renderTabs(); renderLocation(); renderInv(); renderHeader(); }
+function renderHeader(){
+  document.getElementById('hdrGold').textContent = P().gold.toLocaleString();
+  document.getElementById('hdrHp').textContent = `${Math.max(0,Math.ceil(P().hp))}/${maxHp()}`;
+  const c = classOf(P());
+  document.getElementById('hdrClass').textContent = c ? `${c.i} ${c.n} · ⚔️ ${combatLevelOf(P())}` : '⚔️ No class yet';
+  document.getElementById('hdrNet').textContent = net.connected ? `🟢 ${net.remoteName||'partner'} · ${net.remotePos||'linked'}` : '';
+}
+
+function renderSkills(){
+  const el = document.getElementById('skillList');
+  el.innerHTML = '';
+  for (const s of SKILLS){
+    const xp = P().xp[s.id], lvl = levelFor(xp), nx = xpToNext(xp);
+    const row = document.createElement('div');
+    row.innerHTML = `<div class="skillRow" title="${Math.floor(xp).toLocaleString()} xp — ${nx.need>0?Math.ceil(nx.need).toLocaleString()+' xp to '+(lvl+1):'MAXED'}">
+        <span class="sicon">${s.i}</span><span class="sname">${s.n}</span><span class="slvl">${lvl}</span>
+      </div>
+      <div class="skillbar"><i style="width:${Math.round(nx.pct*100)}%"></i></div>`;
+    el.appendChild(row);
+  }
+  document.getElementById('totalLvl').textContent = totalLevel(P());
+}
+
+function renderTabs(){
+  const el = document.getElementById('locTabs');
+  el.innerHTML = '';
+  for (const loc of LOCATIONS){
+    const b = document.createElement('button');
+    b.className = 'tab' + (loc.id===currentLoc?' active':'');
+    b.textContent = loc.n;
+    b.onclick = () => { currentLoc = loc.id; renderTabs(); renderLocation(); };
+    el.appendChild(b);
+  }
+}
+
+function fmtInputs(inp){
+  return Object.entries(inp).map(([k,q])=>`${q}× ${ITEMS[k].n}`).join(', ');
+}
+function haveInputs(inp){
+  return Object.entries(inp).every(([k,q]) => (P().inv[k]||0) >= q);
+}
+
+function renderLocation(){
+  const loc = LOCATIONS.find(l=>l.id===currentLoc);
+  document.getElementById('locTitle').textContent = loc.n;
+  document.getElementById('locDesc').textContent = loc.desc;
+  const grid = document.getElementById('actGrid');
+  grid.innerHTML = '';
+
+  if (loc.kind === 'shop'){ renderShop(grid); return; }
+  if (loc.kind === 'classhall'){ renderClassHall(grid); return; }
+  if (loc.kind === 'wilds'){ renderWilds(grid); return; }
+  if (loc.kind === 'reinforce'){ renderEnchanter(grid); return; }
+  if (loc.kind === 'city'){ renderCity(grid, loc); return; }
+
+  const lvl = levelFor(P().xp[loc.skill]);
+  for (const e of loc.data){
+    const locked = lvl < e.lvl;
+    const div = document.createElement('div');
+    const running = action && action.entry === e;
+    div.className = 'act' + (locked?' locked':'') + (running?' running':'');
+    let html = '';
+    if (loc.kind === 'gather'){
+      html = `<div class="aname"><span class="aicon">${ITEMS[e.item].i}</span>${e.n}</div>
+              <div class="ainfo">${e.xp} xp · ${ITEMS[e.item].n}</div>`;
+    } else if (loc.kind === 'cook'){
+      const burn = burnChance(e, lvl);
+      html = `<div class="aname"><span class="aicon">${ITEMS[e.id].i}</span>Cook ${ITEMS[e.id].n}</div>
+              <div class="ainfo">${e.xp} xp · burn ${Math.round(burn*100)}%</div>
+              <div class="amats">${fmtInputs(e.inp)}</div>`;
+    } else {
+      html = `<div class="aname"><span class="aicon">${ITEMS[e.id].i}</span>${ITEMS[e.id].n}</div>
+              <div class="ainfo">${e.xp} xp</div>
+              <div class="amats">${fmtInputs(e.inp)}</div>`;
+    }
+    if (locked) html += `<div class="areq">Requires ${SKILLS.find(s=>s.id===loc.skill).n} ${e.lvl}</div>`;
+    div.innerHTML = html;
+    if (!locked) div.onclick = () => toggleAction(loc, e);
+    grid.appendChild(div);
+  }
+  /* a hidden cache, if you've noticed it… */
+  if (activeCaches[loc.id]){
+    const d = document.createElement('div');
+    d.className = 'act secret';
+    d.innerHTML = `<div class="aname"><span class="aicon">❓</span>Something glints…</div><div class="ainfo">Investigate the strange shimmer.</div>`;
+    d.onclick = () => lootCache(loc.id);
+    grid.appendChild(d);
+  }
+}
+
+function renderClassHall(grid){
+  const p = P();
+  if (!p.class){
+    for (const [cid, c] of Object.entries(CLASSES)){
+      const d = document.createElement('div');
+      d.className = 'classCard';
+      d.innerHTML = `<h4>${c.i} ${c.n}</h4><div class="cflav">${c.flavor}</div>` +
+        c.abilities.map(a=>`<div class="cab">${a.i} <b>${a.n}</b> — ${a.d}</div>`).join('');
+      d.onclick = () => chooseClass(cid);
+      grid.appendChild(d);
+    }
+    const hint = document.createElement('div');
+    hint.className = 'tierLabel';
+    hint.textContent = 'Click a class to choose it. You can change later at the Class Hall (talents reset).';
+    grid.appendChild(hint);
+    return;
+  }
+  const c = classOf(p);
+  const avail = talentPointsTotal() - talentPointsSpent();
+  const head = document.createElement('div');
+  head.className = 'tierLabel';
+  head.innerHTML = `${c.i} <b style="color:var(--gold)">${c.n}</b> · Combat level ${combatLevelOf(p)} · Talent points: <b style="color:var(--gold)">${avail}</b> available (${talentPointsSpent()} spent) — earn 1 per 20 combat skill levels. Two routes below: shape your own build.`;
+  grid.appendChild(head);
+  for (const a of c.abilities){
+    const d = document.createElement('div');
+    d.className = 'abilityCard';
+    d.innerHTML = `<span class="an">${a.i} ${a.n}</span>${a.cd?` <span style="color:var(--muted)">(${a.cd}-round cooldown)</span>`:''}<div class="ad">${a.d}</div>`;
+    grid.appendChild(d);
+  }
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start;';
+  c.branches.forEach((br, bi) => {
+    const col = document.createElement('div');
+    col.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
+    const pts = branchPoints(bi);
+    const bh = document.createElement('div');
+    bh.className = 'tierLabel';
+    bh.innerHTML = `<b style="color:var(--gold);font-size:13px">${br.i} ${br.n}</b> — ${pts} pts<br><span style="text-transform:none;letter-spacing:0">${br.theme}</span>`;
+    col.appendChild(bh);
+    for (const a of br.abilities){
+      const unlocked = pts >= a.at;
+      const d = document.createElement('div');
+      d.className = 'abilityCard';
+      if (!unlocked) d.style.opacity = .45;
+      d.innerHTML = `<span class="an">${a.i} ${a.n}</span> <span style="color:${unlocked?'var(--green)':'var(--muted)'}">${unlocked?'✓ unlocked':`🔒 at ${a.at} pts in ${br.n}`}</span>
+        ${a.cd?` <span style="color:var(--muted)">(${a.cd}-rd cd)</span>`:''}${a.passive?' <span style="color:var(--muted)">(passive)</span>':''}<div class="ad">${a.d}</div>`;
+      col.appendChild(d);
+    }
+    br.talents.forEach((t,i) => {
+      const tier = Math.floor(i/2);
+      if (i % 2 === 0){
+        const tl = document.createElement('div');
+        tl.className = 'tierLabel';
+        tl.textContent = `Tier ${tier+1}${tier>0?` (needs ${tier*2} pts in ${br.n})`:''}`;
+        col.appendChild(tl);
+      }
+      const rank = (p.talents[bi]||{})[i]||0;
+      const locked = branchPoints(bi) < tier*2;
+      const d = document.createElement('div');
+      d.className = 'talent' + (rank>=t.max?' capped':'') + (locked?' locked':'');
+      d.innerHTML = `<span class="trank">${rank}/${t.max}</span><span class="tname">${t.n}</span>
+        <div class="tdesc">${HOOK_DESC[t.hook].replace('{v}', t.per*(rank||1))}${t.max>1?' per rank':''}</div>`;
+      if (!locked && rank < t.max && avail > 0){
+        const b = document.createElement('button');
+        b.className = 'btn small'; b.textContent = '+ Learn';
+        b.onclick = () => spendTalent(bi, i);
+        d.appendChild(b);
+      }
+      col.appendChild(d);
+    });
+    wrap.appendChild(col);
+  });
+  grid.appendChild(wrap);
+  const foot = document.createElement('div');
+  foot.className = 'tierLabel';
+  const rb = document.createElement('button'); rb.className='btn small'; rb.textContent='♻️ Reset talents';
+  rb.onclick = resetTalents;
+  const cb = document.createElement('button'); cb.className='btn small'; cb.style.marginLeft='8px'; cb.textContent='🚪 Change class';
+  cb.onclick = abandonClass;
+  foot.appendChild(rb); foot.appendChild(cb);
+  grid.appendChild(foot);
+}
+
+function renderWilds(grid){
+  const myCb = P().class ? combatLevelOf(P()) : 0;
+  for (const mon of MONSTERS){
+    const running = combat && combat.mid === mon.id && !combat.champion;
+    const d = document.createElement('div');
+    d.className = 'act' + (running?' running':'');
+    const danger = mon.atk > myCb*1.3 ? '<div class="areq">⚠️ Dangerous for you</div>' : '';
+    const kills = P().kills[mon.id]||0;
+    const trail = mon.den && kills > 0 ? `<div class="ainfo" style="opacity:.55">🐾 trail: ${Math.min(kills, RAID_KILLS*((P().raids[mon.id]||0)+1))}/${RAID_KILLS*((P().raids[mon.id]||0)+1)}</div>` : '';
+    d.innerHTML = `<div class="aname"><span class="aicon">${mon.i}</span>${mon.n}${mon.boss?' ⭐':''}</div>
+      <div class="ainfo">❤️ ${mon.hp} · 💢 max hit ${mon.mh} · 💰 ${mon.gold[0]}–${mon.gold[1]} gp</div>
+      ${mon.loot.length?`<div class="amats">drops: ${mon.loot.map(l=>ITEMS[l[0]].n).join(', ')}</div>`:''}${trail}${danger}`;
+    d.onclick = () => running ? stopAction() : startCombat(mon);
+    grid.appendChild(d);
+  }
+  /* discovered dens — champion raids for war chests */
+  for (const mon of MONSTERS.filter(m => m.den)){
+    const kills = P().kills[mon.id]||0, raids = P().raids[mon.id]||0;
+    if (kills < RAID_KILLS*(raids+1)) continue;
+    const running = combat && combat.mid === mon.id && combat.champion;
+    const d = document.createElement('div');
+    d.className = 'act secret' + (running?' running':'');
+    d.innerHTML = `<div class="aname"><span class="aicon">⛺</span>Raid: ${mon.den}</div>
+      <div class="ainfo">A Champion ${mon.n} guards a war chest of riches.</div>
+      <div class="amats">champion: ❤️ ${Math.round(mon.hp*1.6)} · 💢 ${Math.round(mon.mh*1.3)}</div>`;
+    d.onclick = () => running ? stopAction() : startCombat(mon, true);
+    grid.appendChild(d);
+  }
+}
+
+function renderEnchanter(grid){
+  const p = P();
+  const owned = document.createElement('div');
+  owned.className = 'tierLabel';
+  owned.innerHTML = `Essences: 🔶 ${p.inv.emberstone||0} Emberstone · 🌳 ${p.inv.wispwood_heart||0} Wispwood · 🫧 ${p.inv.tide_pearl||0} Tideglass — found rarely while gathering (higher tiers = better odds), or at the Curio Cabinet in Tidewatch.`;
+  grid.appendChild(owned);
+  const keys = Object.keys(p.inv).filter(k => (EQUIP['r_'+k] || (FOOD[k] && !k.startsWith('r_'))) && p.inv[k] > 0);
+  if (!keys.length){
+    const d = document.createElement('div');
+    d.className = 'locDesc';
+    d.textContent = 'Nothing in your pack can be reinforced. Bring smithed gear, crafted staves/bows, or cooked food.';
+    grid.appendChild(d);
+    return;
+  }
+  for (const k of keys){
+    const rid = 'r_'+k, cost = reinforceCost(k);
+    const have = (p.inv[cost.mat]||0) >= cost.qty;
+    const bonus = EQUIP[rid] ? `${EQUIP[rid].pow} power (+35%) · ${HOOK_DESC[EQUIP[rid].bonus.hook].replace('{v}',EQUIP[rid].bonus.v)}`
+                             : `heals ${FOOD[rid]} (+60%) · grants +10% damage for 10 rounds`;
+    const d = document.createElement('div');
+    d.className = 'act' + (have?'':' locked');
+    d.innerHTML = `<div class="aname"><span class="aicon">✨</span>${ITEMS[k].n} → ${ITEMS[rid].n}</div>
+      <div class="ainfo">${bonus}</div>
+      <div class="amats">costs ${cost.qty}× ${ITEMS[cost.mat].n}</div>`;
+    if (have) d.onclick = () => {
+      p.inv[cost.mat] -= cost.qty; if (p.inv[cost.mat] <= 0) delete p.inv[cost.mat];
+      p.inv[k]--; if (p.inv[k] <= 0) delete p.inv[k];
+      addItem(rid);
+      const xp = EQUIP[rid] ? 40 + (EQUIP[rid].tier||0)*30 : 30;
+      grantXp('crafting', xp);
+      log(`✨ Reinforced: <span class="good">${ITEMS[rid].n}</span> (+${xp} crafting xp)`);
+      renderInv(); renderLocation();
+    };
+    grid.appendChild(d);
+  }
+}
+
+function renderCity(grid, loc){
+  ensureVendorStock();
+  const mins = Math.max(1, Math.ceil((state.vendorRestockAt - Date.now())/60000));
+  const t = document.createElement('div');
+  t.className = 'tierLabel';
+  t.textContent = `🕐 Vendors restock in ~${mins} min`;
+  grid.appendChild(t);
+  for (const v of loc.vendors){
+    const h = document.createElement('div');
+    h.className = 'tierLabel';
+    h.innerHTML = `<b style="color:var(--gold)">${v.i} ${v.n}</b> — buy below, prices 140% of value`;
+    grid.appendChild(h);
+    const stock = state.vendorStock[v.id] || {};
+    const items = Object.keys(stock).filter(k => stock[k] > 0);
+    if (!items.length){
+      const d = document.createElement('div'); d.className = 'locDesc'; d.textContent = 'Sold out — come back after restock.';
+      grid.appendChild(d); continue;
+    }
+    for (const k of items){
+      const price = Math.ceil(ITEMS[k].v * 1.4);
+      const row = document.createElement('div');
+      row.className = 'shopRow';
+      row.style.gridColumn = '1/-1';
+      row.innerHTML = `<span>${ITEMS[k].i}</span><span class="sn">${ITEMS[k].n} × ${stock[k]}</span><span class="sv">${price} gp</span>`;
+      const b1 = document.createElement('button'); b1.className='btn small'; b1.textContent='Buy 1';
+      b1.onclick = () => buyItem(v.id, k, 1);
+      const b5 = document.createElement('button'); b5.className='btn small'; b5.textContent='Buy 5';
+      b5.onclick = () => buyItem(v.id, k, 5);
+      row.appendChild(b1); row.appendChild(b5);
+      grid.appendChild(row);
+    }
+  }
+  const sh = document.createElement('div');
+  sh.className = 'tierLabel';
+  sh.innerHTML = `<b style="color:var(--gold)">💰 Sell from your pack</b> — full value, any vendor will take it`;
+  grid.appendChild(sh);
+  renderShop(grid);
+  /* sometimes, tucked behind the stalls… */
+  if (Math.random() < 0.12){
+    const d = document.createElement('div');
+    d.className = 'act barrel';
+    d.style.gridColumn = '1/-1';
+    d.innerHTML = `<div class="aname"><span class="aicon">🛢️</span></div>`;
+    d.onclick = () => {
+      const g = 20 + Math.floor(Math.random()*60);
+      P().gold += g;
+      log(`🛢️ You pry open a forgotten barrel behind the stalls — <span class="good">+${g} gp</span>`);
+      d.remove();
+      renderHeader();
+    };
+    grid.appendChild(d);
+  }
+}
+
+function renderShop(grid){
+  const inv = P().inv;
+  const keys = Object.keys(inv).filter(k=>inv[k]>0);
+  if (!keys.length){
+    grid.innerHTML = '<div class="locDesc">Your pack is empty — nothing to sell. Go gather something!</div>';
+    return;
+  }
+  for (const k of keys){
+    const row = document.createElement('div');
+    row.className = 'shopRow';
+    row.innerHTML = `<span>${ITEMS[k].i}</span><span class="sn">${ITEMS[k].n} × ${inv[k]}</span>
+      <span class="sv">${ITEMS[k].v} gp</span>`;
+    const b1 = document.createElement('button'); b1.className='btn small'; b1.textContent='Sell 1';
+    b1.onclick = ()=>sellItem(k,1);
+    const bAll = document.createElement('button'); bAll.className='btn small'; bAll.textContent='Sell all';
+    bAll.onclick = ()=>sellItem(k,inv[k]);
+    row.appendChild(b1); row.appendChild(bAll);
+    grid.appendChild(row);
+  }
+}
+function sellItem(k, qty){
+  const inv = P().inv;
+  qty = Math.min(qty, inv[k]||0);
+  if (qty <= 0) return;
+  inv[k] -= qty; if (inv[k]===0) delete inv[k];
+  const got = qty * ITEMS[k].v;
+  P().gold += got;
+  log(`Sold ${qty}× ${ITEMS[k].n} for <span class="good">${got.toLocaleString()} gp</span>.`);
+  renderHeader(); renderInv(); renderLocation();
+}
+
+/* ---------- inventory ---------- */
+function setInvView(v){
+  invView = v;
+  for (const [id, key] of [['tabInv','inv'],['tabBank','bank'],['tabGear','gear'],['tabChest','chest']])
+    document.getElementById(id).className = 'tab' + (v===key?' active':'');
+  renderInv();
+}
+function sectionLabel(grid, html){
+  const d = document.createElement('div');
+  d.style.cssText = 'grid-column:1/-1;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-top:4px;';
+  d.innerHTML = html;
+  grid.appendChild(d);
+}
+function itemSlot(grid, k, qty, title, onclick){
+  const slot = document.createElement('div');
+  slot.className = 'slot';
+  slot.title = title;
+  slot.innerHTML = `${qty!==null?`<span class="qty">${qty}</span>`:''}<span class="icon">${ITEMS[k]?ITEMS[k].i:'—'}</span><span>${ITEMS[k]?ITEMS[k].n:k}</span>`;
+  if (onclick) slot.onclick = onclick;
+  grid.appendChild(slot);
+  return slot;
+}
+function padSlots(grid, count){
+  for (let i=0;i<count;i++){ const s=document.createElement('div'); s.className='slot'; grid.appendChild(s); }
+}
+function renderInv(){
+  const grid = document.getElementById('invGrid');
+  const hint = document.getElementById('invHint');
+  grid.innerHTML = '';
+
+  if (invView === 'gear'){
+    const SLOT_ICON = {weapon:'🗡️', helm:'🪖', body:'🛡️', legs:'🦵'};
+    sectionLabel(grid, 'Equipped');
+    for (const s of ['weapon','helm','body','legs']){
+      const id = P().gear[s];
+      if (id) itemSlot(grid, id, null, `${ITEMS[id].n} (power ${EQUIP[id].pow}) — click to unequip`, () => unequipItem(s));
+      else { const e = document.createElement('div'); e.className='slot'; e.innerHTML = `<span class="icon">${SLOT_ICON[s]}</span><span>${s}</span>`; grid.appendChild(e); }
+    }
+    const equippable = Object.keys(P().inv).filter(k => EQUIP[k] && P().inv[k] > 0);
+    sectionLabel(grid, 'In your pack — click to equip');
+    if (equippable.length)
+      for (const k of equippable){
+        const e = EQUIP[k], err = canEquip(k);
+        const slot = itemSlot(grid, k, P().inv[k], `${ITEMS[k].n} — power ${e.pow}${e.bonus?`, ${HOOK_DESC[e.bonus.hook].replace('{v}',e.bonus.v)}`:''}${err?` (${err})`:''}`, () => equipItem(k));
+        if (err) slot.style.opacity = .45;
+      }
+    else padSlots(grid, 4);
+    hint.textContent = 'Weapon type follows your class: melee = smithed, magic = staves, ranged = bows.';
+    return;
+  }
+
+  if (invView === 'chest'){
+    sectionLabel(grid, `Shared chest — both players · 💰 ${state.chest.gold.toLocaleString()} gp inside`);
+    const gd = document.createElement('div');
+    gd.style.cssText = 'grid-column:1/-1;display:flex;gap:6px;';
+    const dep = document.createElement('button'); dep.className='btn small'; dep.textContent='Put in 100 gp';
+    dep.onclick = () => { const amt = Math.min(100, P().gold); if(amt<=0){toast('No gold');return;} P().gold-=amt; chestDelta({}, amt); renderHeader(); };
+    const take = document.createElement('button'); take.className='btn small'; take.textContent='Take all gold';
+    take.onclick = () => { const amt = state.chest.gold; P().gold += amt; chestDelta({}, -amt); renderHeader(); };
+    gd.appendChild(dep); gd.appendChild(take);
+    grid.appendChild(gd);
+    const ckeys = Object.keys(state.chest.items).filter(k => state.chest.items[k] > 0);
+    sectionLabel(grid, 'In the chest — click to take');
+    if (ckeys.length)
+      for (const k of ckeys) itemSlot(grid, k, state.chest.items[k], `${ITEMS[k].n} — click to take`, () => {
+        const q = state.chest.items[k]||0; if (!q) return;
+        addItem(k, q); chestDelta({[k]:-q}, 0);
+      });
+    else padSlots(grid, 4);
+    const pkeys = Object.keys(P().inv).filter(k => P().inv[k] > 0);
+    sectionLabel(grid, 'Your pack — click to give');
+    if (pkeys.length)
+      for (const k of pkeys) itemSlot(grid, k, P().inv[k], `${ITEMS[k].n} — click to put in chest`, () => {
+        const q = P().inv[k]||0; if (!q) return;
+        delete P().inv[k]; chestDelta({[k]:q}, 0);
+      });
+    else padSlots(grid, 4);
+    hint.textContent = 'The chest is shared: leave gifts here for the other player. Save the world code to pass it along!';
+    return;
+  }
+
+  const src = invView==='inv' ? P().inv : P().bank;
+  const keys = Object.keys(src).filter(k=>src[k]>0);
+  for (const k of keys)
+    itemSlot(grid, k, src[k], invView==='inv' ? `${ITEMS[k].n} — click to bank` : `${ITEMS[k].n} — click to withdraw`, () => moveItem(k));
+  padSlots(grid, Math.max(0, 12 - keys.length));
+  hint.textContent = invView==='inv'
+    ? 'Click an item to deposit it in the bank.' : 'Click an item to withdraw it to your pack.';
+}
+function moveItem(k){
+  const from = invView==='inv' ? P().inv : P().bank;
+  const to   = invView==='inv' ? P().bank : P().inv;
+  const q = from[k]||0; if (!q) return;
+  to[k] = (to[k]||0) + q; delete from[k];
+  renderInv(); if (currentLoc==='shop') renderLocation();
+}
+function addItem(k, q=1){ P().inv[k] = (P().inv[k]||0) + q; }
+function consume(inp){
+  for (const [k,q] of Object.entries(inp)){ P().inv[k] -= q; if (P().inv[k]<=0) delete P().inv[k]; }
+}
+
+/* ---------- actions ---------- */
+/* ---------- action scenes ---------- */
+const SCENES = {
+  woods:  {tool:'🪓', target:e => ({tree:'🌳',oak:'🌳',willow:'🌳',maple:'🍁',yew:'🌲',elder:'🎄'}[e.id]||'🌳')},
+  mine:   {tool:'⛏️', target:e => e.id==='coalr' ? '⚫' : '🪨'},
+  river:  {tool:'🎣', target:() => '🌊'},
+  forge:  {tool:null,  target:() => '🔥'},
+  anvil:  {tool:'🔨', target:e => ITEMS[e.id].i},
+  kitchen:{tool:'🍳', target:() => '♨️'},
+  workshop:{tool:'✂️', target:e => ITEMS[e.id].i},
+};
+function charIcon(){ const c = classOf(P()); return c ? c.i : (activeId==='k' ? '🧙‍♂️' : '🧝‍♀️'); }
+function setScene(loc, e){
+  const sc = SCENES[loc.id] || {tool:null, target:() => '❔'};
+  document.getElementById('scChar').textContent = charIcon();
+  const toolEl = document.getElementById('scTool');
+  if (sc.tool){ toolEl.style.display = 'inline-block'; toolEl.textContent = sc.tool; }
+  else toolEl.style.display = 'none';
+  document.getElementById('scTarget').textContent = sc.target(e);
+}
+function spawnDrop(txt){
+  const scene = document.getElementById('scene');
+  if (!scene || scene.offsetParent === null) return;
+  const d = document.createElement('span');
+  d.className = 'drop';
+  d.style.left = (42 + Math.random()*26) + '%';
+  d.textContent = txt;
+  scene.appendChild(d);
+  setTimeout(() => d.remove(), 1100);
+}
+function hitTarget(){
+  const t = document.getElementById('scTarget');
+  t.classList.remove('hit'); void t.offsetWidth; t.classList.add('hit');
+}
+function anim(id, cls){
+  const el = document.getElementById(id); if (!el) return;
+  el.classList.remove('atk','hit'); void el.offsetWidth; el.classList.add(cls);
+}
+
+function toggleAction(loc, e){
+  if (action && action.entry === e){ stopAction(); return; }
+  if (combat) stopAction();
+  if (loc.kind !== 'gather' && !haveInputs(e.inp)){
+    toast(`You need: ${fmtInputs(e.inp)}`); return;
+  }
+  action = { loc, entry: e, elapsed: 0 };
+  document.getElementById('actionBar').style.display = 'block';
+  const label = loc.kind==='gather' ? e.n : ITEMS[e.id].n;
+  document.getElementById('abName').textContent = `${loc.n} — ${label}`;
+  setScene(loc, e);
+  if (!tickTimer) tickTimer = setInterval(tick, 100);
+  renderLocation();
+}
+function stopAction(){
+  action = null; combat = null;
+  document.getElementById('actionBar').style.display = 'none';
+  document.getElementById('combatBox').style.display = 'none';
+  if (tickTimer){ clearInterval(tickTimer); tickTimer = null; }
+  renderLocation();
+}
+function procTime(e){ return e.time || 2.6; }
+
+function tick(){
+  if (!action) return;
+  action.elapsed += 0.1;
+  const t = action.kind === 'combat' ? 1.5 : procTime(action.entry);
+  if (action.kind === 'combat')
+    document.getElementById('cbFill2').style.width = Math.min(100, action.elapsed/t*100) + '%';
+  else
+    document.getElementById('abFill').style.width = Math.min(100, action.elapsed/t*100) + '%';
+  if (action.elapsed >= t){
+    action.elapsed = 0;
+    if (action.kind === 'combat') combatRound(); else resolveAction();
+  }
+}
+
+function successChance(lvl, req){ return Math.min(0.95, 0.5 + (lvl - req) * 0.01); }
+function burnChance(e, lvl){
+  if (lvl >= e.stop) return 0;
+  const span = e.stop - e.lvl;
+  return Math.max(0, 0.4 * (e.stop - lvl) / span);
+}
+
+function grantXp(skill, amount){
+  const before = levelFor(P().xp[skill]);
+  P().xp[skill] += amount;
+  const after = levelFor(P().xp[skill]);
+  if (after > before){
+    const sk = SKILLS.find(s=>s.id===skill);
+    log(`<span class="lvl">✨ Level up! ${sk.n} is now ${after}.</span>`);
+    toast(`✨ ${sk.n} level ${after}!`);
+    renderLocation();
+  }
+  renderSkills();
+}
+
+function resolveAction(){
+  const {loc, entry} = action;
+  const skill = loc.skill;
+  const lvl = levelFor(P().xp[skill]);
+
+  if (loc.kind === 'gather'){
+    if (Math.random() < successChance(lvl, entry.lvl)){
+      addItem(entry.item);
+      grantXp(skill, entry.xp);
+      spawnDrop(`${ITEMS[entry.item].i} +1`); hitTarget();
+      log(`+1 ${ITEMS[entry.item].n} <span class="good">(+${entry.xp} ${skill} xp)</span>`);
+      const tierIdx = loc.data.indexOf(entry);
+      if (!activeCaches[loc.id] && Math.random() < 0.006 + 0.004*tierIdx){
+        activeCaches[loc.id] = {tier: tierIdx};
+        log(`<span style="color:#9a7fd1">You notice something odd nearby…</span>`);
+        renderLocation();
+      }
+      const rare = RARE_BY_LOC[loc.id];
+      if (rare && Math.random() < rareChance(loc.data.indexOf(entry))){
+        addItem(rare);
+        log(`<span class="lvl">${ITEMS[rare].i} A ${ITEMS[rare].n} glimmers among your haul — the Enchanter will want this!</span>`);
+        toast(`${ITEMS[rare].i} Rare find: ${ITEMS[rare].n}!`);
+      }
+      if (loc.id === 'mine' && Math.random() < GEM_CHANCE){
+        const total = GEMS.reduce((a,g)=>a+g.w,0);
+        let r = Math.random()*total, gem = GEMS[0].item;
+        for (const g of GEMS){ if (r < g.w){ gem = g.item; break; } r -= g.w; }
+        addItem(gem);
+        log(`<span class="good">💠 You strike something precious — ${ITEMS[gem].n}!</span>`);
+      }
+    } else {
+      log(`You swing and miss…`);
+    }
+  }
+  else if (loc.kind === 'cook'){
+    if (!haveInputs(entry.inp)){ log('Out of raw food.'); stopAction(); return; }
+    consume(entry.inp);
+    if (Math.random() < burnChance(entry, lvl)){
+      addItem('burnt_food');
+      spawnDrop('🔥');
+      log(`<span class="bad">🔥 You burn the ${ITEMS[entry.id].n.toLowerCase()}.</span>`);
+    } else {
+      addItem(entry.id);
+      grantXp(skill, entry.xp);
+      spawnDrop(`${ITEMS[entry.id].i} +1`); hitTarget();
+      log(`Cooked ${ITEMS[entry.id].n} <span class="good">(+${entry.xp} cooking xp)</span>`);
+    }
+  }
+  else { // process: smelt / smith / craft
+    if (!haveInputs(entry.inp)){ log('Out of materials.'); stopAction(); return; }
+    consume(entry.inp);
+    addItem(entry.id);
+    grantXp(skill, entry.xp);
+    spawnDrop(`${ITEMS[entry.id].i} +1`); hitTarget();
+    log(`Made ${ITEMS[entry.id].n} <span class="good">(+${entry.xp} ${skill} xp)</span>`);
+  }
+  renderInv();
+  if (currentLoc==='shop') renderLocation();
+}
+
+/* =====================================================================
+   COMBAT ENGINE
+===================================================================== */
+let combat = null;
+let activeCaches = {};   // locId -> {tier} — transient hidden treasure spots
+const clamp = (v,a,b) => Math.max(a, Math.min(b,v));
+function lootCache(locId){
+  const c = activeCaches[locId]; if (!c) return;
+  delete activeCaches[locId];
+  const t = c.tier;
+  const gold = Math.round((40 + Math.random()*80) * (t+1) * (1 + statVal('gold')/100));
+  P().gold += gold;
+  let msg = `+${gold} gp`;
+  if (Math.random() < 0.18){ const e = ESSENCES[Math.floor(Math.random()*3)]; addItem(e); msg += `, ${ITEMS[e].n}`; }
+  if (Math.random() < 0.30){ const g = GEM_POOL[Math.min(3, Math.floor(Math.random()*(t/1.5+1)))]; addItem(g); msg += `, ${ITEMS[g].n}`; }
+  if (Math.random() < 0.30){ const f = ['trout','salmon','lobster','swordfish'][Math.min(3, Math.floor(t/1.5))]; addItem(f,2); msg += `, 2× ${ITEMS[f].n}`; }
+  log(`🎁 <span class="lvl">Hidden cache!</span> <span class="good">${msg}</span>`);
+  toast('🎁 Hidden cache found!');
+  renderHeader(); renderInv(); renderLocation();
+}
+function classOf(p){ return p.class ? CLASSES[p.class] : null; }
+function gearBonusVal(hook){
+  let v = 0;
+  for (const slot of ['weapon','helm','body','legs']){
+    const id = P().gear[slot]; if (!id) continue;
+    const b = EQUIP[id] && EQUIP[id].bonus;
+    if (b && b.hook === hook) v += b.v;
+  }
+  return v;
+}
+function statVal(hook){
+  let v = gearBonusVal(hook);
+  const cls = classOf(P()); if (!cls) return v;
+  cls.branches.forEach((br,bi) => {
+    br.talents.forEach((t,i) => { const r = (P().talents[bi]||{})[i]||0; if (r && t.hook===hook) v += r*t.per; });
+  });
+  return v;
+}
+function branchPoints(bi){ return Object.values(P().talents[bi]||{}).reduce((a,b)=>a+b,0); }
+function hasAbility(aid){
+  const cls = classOf(P()); if (!cls) return false;
+  for (let bi=0; bi<cls.branches.length; bi++)
+    for (const a of cls.branches[bi].abilities)
+      if (a.id === aid && branchPoints(bi) >= a.at) return true;
+  return false;
+}
+function maxHp(){ return Math.max(10, Math.floor(levelFor(P().xp.hitpoints) * (1 + statVal('maxhp')/100))); }
+function healPlayer(amt){ P().hp = Math.min(maxHp(), P().hp + amt); }
+function gearPow(slot){ const id = P().gear[slot]; return id && EQUIP[id] ? EQUIP[id].pow : 0; }
+function armorPow(){ return gearPow('helm') + gearPow('body') + gearPow('legs'); }
+function styleSkillId(){ const c = classOf(P()); return c.style==='melee' ? 'strength' : (c.style==='magic' ? 'magic' : 'ranged'); }
+function accSkillId(){ const c = classOf(P()); return c.style==='melee' ? 'attack' : (c.style==='magic' ? 'magic' : 'ranged'); }
+function combatLevelOf(p){
+  const l = s => levelFor(p.xp[s]);
+  return Math.max(1, Math.floor(0.25*(l('defence')+l('hitpoints')) + 0.33*Math.max(l('attack')+l('strength'), 1.5*l('magic'), 1.5*l('ranged'))));
+}
+function talentPointsTotal(){ return Math.max(0, Math.floor((COMBAT_SKILLS.reduce((a,s)=>a+levelFor(P().xp[s]),0) - 15) / 20)); }
+function talentPointsSpent(){ return branchPoints(0) + branchPoints(1); }
+function playerMaxHit(){
+  const lvl = levelFor(P().xp[styleSkillId()]);
+  const buff = combat && combat.buffs.dmg ? combat.buffs.dmg.mult : 0;
+  return Math.max(1, Math.floor((1.5 + lvl*0.25 + gearPow('weapon')*0.35) * (1 + (statVal('dmg')+buff)/100)));
+}
+function playerAcc(mdef){
+  const a = levelFor(P().xp[accSkillId()]) + gearPow('weapon')*0.5;
+  return clamp(0.55 + (a - mdef)*0.01 + statVal('acc')/100, 0.25, 0.95);
+}
+function curMon(){ return combat.stats || MONSTERS.find(m => m.id === combat.mid); }
+function rollDmg(mult, guaranteed){
+  const mon = curMon();
+  if (!guaranteed && Math.random() > playerAcc(mon.def)) return 0;
+  const mh = Math.max(1, Math.round(playerMaxHit()*mult));
+  let d = 1 + Math.floor(Math.random()*mh);
+  const critCh = statVal('crit') + (hasAbility('sniper') ? 10 : 0);
+  if (Math.random() < critCh/100) d = Math.round(d * (hasAbility('sniper') ? 1.75 : 1.5));
+  return d;
+}
+function dealXp(d){
+  if (d <= 0) return;
+  const boost = 1 + statVal('xpboost')/100;
+  const cls = classOf(P());
+  if (cls.style === 'melee') grantXp(combat.round % 2 ? 'attack' : 'strength', d*4*boost);
+  else grantXp(styleSkillId(), d*4*boost);
+  grantXp('hitpoints', d*1.33*boost);
+}
+function startCombat(mon, champion){
+  if (!P().class){
+    toast('Choose a class at the ⚜️ Class Hall first!');
+    currentLoc = 'classhall'; renderTabs(); renderLocation(); return;
+  }
+  stopAction();
+  const stats = champion
+    ? {...mon, n:'Champion '+mon.n, hp:Math.round(mon.hp*1.6), atk:Math.round(mon.atk*1.25), def:Math.round(mon.def*1.15), mh:Math.round(mon.mh*1.3)}
+    : {...mon};
+  combat = {mid:mon.id, champion:!!champion, stats, mhp:stats.hp, round:0, cds:{}, buffs:{}, mdots:[], frozen:0, dodge:0, immune:0, frenzy:0, layUsed:false};
+  action = {kind:'combat', elapsed:0};
+  log(champion ? `⛺ <span class="lvl">You storm the ${mon.den}! A ${stats.n} bars the way to the war chest.</span>` : `⚔️ You engage the ${mon.n}!`);
+  if (P().class === 'rogue'){ const d = rollDmg(2.5,true); combat.mhp -= d; dealXp(d); log(`🔪 Backstab! <span class="good">${d}</span> from the shadows.`); }
+  if (P().class === 'hunter'){ const d = rollDmg(1.5,true); combat.mhp -= d; dealXp(d); log(`💥 Your trap detonates for <span class="good">${d}</span>!`); }
+  document.getElementById('combatBox').style.display = 'block';
+  document.getElementById('cbMe').textContent = charIcon();
+  document.getElementById('cbFoe').textContent = stats.i;
+  if (!tickTimer) tickTimer = setInterval(tick, 100);
+  updateCombatBox('');
+  renderLocation();
+}
+function warChest(){
+  const base = MONSTERS.find(m => m.id === combat.mid);
+  P().kills[base.id] = (P().kills[base.id]||0) + 1;
+  P().raids[base.id] = (P().raids[base.id]||0) + 1;
+  const g = Math.round(base.gold[1] * 5 * (1 + statVal('gold')/100));
+  P().gold += g;
+  let msg = `+${g.toLocaleString()} gp`;
+  const nGems = 1 + (Math.random() < 0.5 ? 1 : 0);
+  for (let i=0; i<nGems; i++){
+    const gem = GEM_POOL[Math.min(3, Math.floor(Math.random()*(base.tier/1.5+1.5)))];
+    addItem(gem); msg += `, ${ITEMS[gem].n}`;
+  }
+  if (Math.random() < 0.45){ const e = ESSENCES[Math.floor(Math.random()*3)]; addItem(e); msg += `, ${ITEMS[e].n}`; }
+  if (Math.random() < 0.35){
+    const pool = Object.keys(EQUIP).filter(k => !k.startsWith('r_') && EQUIP[k].tier === base.tier);
+    const it = pool[Math.floor(Math.random()*pool.length)];
+    if (it){ addItem(it); msg += `, ${ITEMS[it].n}`; }
+  }
+  log(`🏆 <span class="lvl">The Champion falls — you crack open the ${base.den} war chest!</span> <span class="good">${msg}</span>`);
+  toast('🏆 War chest looted!');
+  stopAction(); renderHeader(); renderInv();
+}
+function updateCombatBox(fx){
+  if (!combat) return;
+  const mon = curMon(), mhp = maxHp();
+  document.getElementById('cbPlayer').textContent = `${classOf(P()).i} ${P().name}`;
+  document.getElementById('cbPHP').textContent = `${Math.max(0,Math.ceil(P().hp))}/${mhp}`;
+  document.getElementById('cbPFill').style.width = clamp(P().hp/mhp*100,0,100) + '%';
+  document.getElementById('cbMon').textContent = `${mon.i} ${mon.n}${mon.boss?' ⭐':''}`;
+  document.getElementById('cbMHP').textContent = `${Math.max(0,combat.mhp)}/${mon.hp}`;
+  document.getElementById('cbMFill').style.width = clamp(combat.mhp/mon.hp*100,0,100) + '%';
+  if (fx !== undefined) document.getElementById('cbFx').textContent = fx;
+}
+function combatRound(){
+  if (!combat) return;
+  const mon = curMon(), cid = P().class;
+  combat.round++;
+  for (const k in combat.cds) combat.cds[k] = Math.max(0, combat.cds[k]-1);
+  const apow = 1 + statVal('abilitypow')/100;
+  const cdr = statVal('cdr');
+  const ready = a => (combat.cds[a]||0) <= 0;
+  const setCd = (a,base) => combat.cds[a] = Math.max(1, base - cdr);
+  const dotBoost = hasAbility('haunt') ? 1.3 : 1;
+  const dot = (m,r,label) => ({dmg:Math.max(1,Math.round(playerMaxHit()*m*apow*dotBoost)), rounds:r, label});
+  let fx = [], dealt = 0;
+  const dmgMon = (d,label) => { if (d>0){ combat.mhp -= d; dealt += d; fx.push(label+' '+d); } else fx.push(label+' miss'); };
+
+  /* --- player turn (route abilities take priority over base kit) --- */
+  let used = false;
+  if (cid==='princess'){
+    const smiteMult = hasAbility('corona') ? 3.1 : 2.5;
+    const smiteCd = hasAbility('corona') ? 4 : 5;
+    if (hasAbility('flare') && ready('flare')){ dmgMon(Math.round(rollDmg(2.8,true)*apow), '🌞'); combat.mdots.push(dot(0.25,3,'🌞')); setCd('flare',6); used = true; }
+    else if (ready('smite')){ dmgMon(Math.round(rollDmg(smiteMult,true)*apow), '🌠'); setCd('smite',smiteCd); used = true; }
+    else if (ready('crown') && !combat.buffs.dmg){ combat.buffs.dmg = {mult:Math.round(25*apow), rounds:4}; setCd('crown',10); fx.push('✨ Crown of Cosmos'); }
+  } else if (cid==='warlock'){
+    if (hasAbility('unstable') && ready('unstable') && combat.mdots.length){
+      let tot = 0; combat.mdots.forEach(x => tot += x.dmg*2);
+      dmgMon(tot, '☠️ Unstable'); setCd('unstable',7); used = true;
+    }
+    else if (ready('drain')){ const d = Math.round(rollDmg(1.2,false)*apow); dmgMon(d,'🩸'); if (d>0) healPlayer(d); setCd('drain',4); used = true; }
+    else if (ready('curse') && !combat.mdots.some(x=>x.label==='🕯️')){ combat.mdots.push(dot(0.4,5,'🕯️')); setCd('curse',6); fx.push('🕯️ Curse of Embers'); }
+  } else if (cid==='mage'){
+    const novaCd = hasAbility('permafrost') ? 6 : 8;
+    const novaLen = hasAbility('permafrost') ? 3 : 2;
+    if (hasAbility('combust') && ready('combust')){ dmgMon(Math.round(rollDmg(2.8,true)*apow), '💥'); combat.mdots.push(dot(0.3,3,'💥')); setCd('combust',6); used = true; }
+    else if (hasAbility('icicles') && ready('icicles')){ for (let i=0;i<3;i++) dmgMon(Math.round(rollDmg(0.8,false)*apow), '🧊'); setCd('icicles',5); used = true; }
+    else if (ready('fireball')){ const d = Math.round(rollDmg(2,false)*apow); dmgMon(d,'🔥'); if (d>0) combat.mdots.push(dot(0.2,3,'🔥')); setCd('fireball',4); used = true; }
+    if (!used && ready('nova') && combat.frozen<=0){ combat.frozen = novaLen; setCd('nova',novaCd); fx.push('❄️ Frost Nova'); }
+    else if (!used && ready('surge') && !combat.buffs.dmg){ combat.buffs.dmg = {mult:Math.round(40*apow), rounds:3}; setCd('surge',10); fx.push('💫 Arcane Surge'); }
+    if (hasAbility('permafrost') && combat.frozen<=0 && Math.random()<0.15){ combat.frozen = 1; fx.push('🌨️ flash-freeze'); }
+  } else if (cid==='hunter'){
+    if (hasAbility('wrath') && ready('wrath') && combat.frenzy<=0){ combat.frenzy = 2; setCd('wrath',8); fx.push('😤 Bestial Wrath'); }
+    if (hasAbility('multishot') && ready('multishot')){ dmgMon(Math.round(rollDmg(1.2,false)*apow),'🏹'); dmgMon(Math.round(rollDmg(1.2,false)*apow),'🏹'); setCd('multishot',5); used = true; }
+    else if (ready('aimed')){ dmgMon(Math.round(rollDmg(2,true)*apow), '🎯'); setCd('aimed',4); used = true; }
+  } else if (cid==='rogue'){
+    if (hasAbility('shadowdance') && ready('shadowdance')){ dmgMon(Math.round(rollDmg(2.5,true)*apow), '🌫️'); setCd('shadowdance',9); used = true; }
+    else if (hasAbility('envenom') && ready('envenom')){
+      const m = combat.mdots.some(x=>x.label==='🧪') ? 3.0 : 2.0;
+      dmgMon(Math.round(rollDmg(m,true)*apow), '💉'); setCd('envenom',6); used = true;
+    }
+    const maxPois = hasAbility('toxic') ? 2 : 1;
+    const poisPot = hasAbility('toxic') ? 0.42 : 0.3;
+    if (ready('poison') && combat.mdots.filter(x=>x.label==='🧪').length < maxPois){ combat.mdots.push(dot(poisPot,5,'🧪')); setCd('poison',6); fx.push('🧪 Poison Blade'); }
+  } else if (cid==='paladin'){
+    if (hasAbility('wrathlight') && ready('wrathlight')){ dmgMon(Math.round(rollDmg(2.4,false)*apow), '⚡'); healPlayer(Math.round(maxHp()*0.08*apow)); setCd('wrathlight',6); used = true; }
+    else if (ready('holystrike')){
+      dmgMon(Math.round(rollDmg(1.8,false)*apow), '⚜️'); healPlayer(Math.round(maxHp()*0.1*apow)); setCd('holystrike',4); used = true;
+      if (hasAbility('zeal')) dmgMon(Math.round(rollDmg(1.08,false)*apow), '🔱');
+    }
+    if (hasAbility('sanctuary')) healPlayer(Math.round(maxHp()*0.03));
+  }
+  if (!used){
+    const bd = rollDmg(1,false);
+    dmgMon(bd, '⚔️');
+    if (bd > 0 && hasAbility('living_flame') && !combat.mdots.some(x=>x.label==='🎇')) combat.mdots.push(dot(0.15,2,'🎇'));
+  }
+  /* companions */
+  if (cid==='warlock'){
+    const petM = hasAbility('felguard') ? 0.55 : 0.3;
+    const pd = rollDmg(petM, true);
+    dmgMon(pd, hasAbility('felguard') ? '⚔️👿' : '👿');
+    if (hasAbility('pact') && pd > 0) healPlayer(Math.round(pd/2));
+  }
+  if (cid==='hunter'){
+    const times = hasAbility('alpha') ? 2 : 1;
+    const petM = 0.3 * (combat.frenzy > 0 ? 3 : 1);
+    for (let i=0;i<times;i++) dmgMon(rollDmg(petM,true), '🐺');
+    if (combat.frenzy > 0) combat.frenzy--;
+  }
+  combat.mdots = combat.mdots.filter(d => { combat.mhp -= d.dmg; dealt += d.dmg; fx.push(d.label+' '+d.dmg); return --d.rounds > 0; });
+  const ls = statVal('lifesteal')/100;
+  if (ls > 0 && dealt > 0) healPlayer(Math.round(dealt*ls));
+  if (dealt > 0){ anim('cbMe','atk'); setTimeout(() => anim('cbFoe','hit'), 180); }
+  dealXp(dealt);
+
+  /* --- monster death & loot --- */
+  if (combat.mhp <= 0){
+    if (combat.champion){ warChest(); return; }
+    const baseMon = MONSTERS.find(m => m.id === combat.mid);
+    P().kills[baseMon.id] = (P().kills[baseMon.id]||0) + 1;
+    const g = Math.round((mon.gold[0] + Math.floor(Math.random()*(mon.gold[1]-mon.gold[0]+1))) * (1 + statVal('gold')/100));
+    P().gold += g;
+    let lootMsg = '';
+    for (const [it,ch] of mon.loot){ if (Math.random() < ch){ addItem(it); lootMsg += ` +${ITEMS[it].n}`; } }
+    log(`💀 You slay the ${mon.n}! <span class="good">+${g} gp${lootMsg}</span>`);
+    if (baseMon.den && (P().kills[baseMon.id]) === RAID_KILLS*((P().raids[baseMon.id]||0)+1)){
+      log(`<span style="color:#9a7fd1">🗺️ Following their tracks, you've found the ${baseMon.den}. A raid card now waits in the Wilds…</span>`);
+      toast(`🗺️ ${baseMon.den} discovered!`);
+    }
+    combat.mhp = mon.hp; combat.mdots = []; combat.frozen = 0; combat.layUsed = false;
+    fx.push(`a new ${mon.n} appears…`);
+    renderInv(); renderLocation();
+  } else {
+    /* --- monster turn --- */
+    if (combat.frozen > 0){ combat.frozen--; fx.push('❄️ frozen'); }
+    else if (combat.immune > 0){ combat.immune--; fx.push('🛡️ immune'); }
+    else if (combat.dodge > 0){ combat.dodge--; fx.push('💨 dodged'); }
+    else if (hasAbility('ghost') && Math.random() < 0.15){ fx.push('👤 ghost walk'); }
+    else {
+      const defv = levelFor(P().xp.defence) * (1 + statVal('def')/100) + armorPow()*0.6;
+      if (Math.random() < clamp(0.55 + (mon.atk - defv)*0.01, 0.1, 0.9)){
+        let md = 1 + Math.floor(Math.random()*mon.mh);
+        const dr = (hasAbility('eclipse') ? 12 : 0) + (hasAbility('aegis') ? 12 : 0);
+        if (dr > 0) md = Math.max(1, Math.round(md * (1 - dr/100)));
+        P().hp -= md; fx.push(`${mon.i} hits ${md}`);
+        setTimeout(() => { anim('cbFoe','atk'); setTimeout(() => anim('cbMe','hit'), 180); }, 550);
+        grantXp('defence', md*1.5);
+      } else { fx.push(`${mon.i} misses`); grantXp('defence', 2); }
+    }
+  }
+
+  /* --- triggered saves --- */
+  if (P().hp > 0){
+    const pct = P().hp / maxHp();
+    if (cid==='princess' && pct < 0.4 && ready('renew')){ const h = Math.round(maxHp()*0.3*apow); healPlayer(h); setCd('renew',8); fx.push('🌌 Nebula Renewal +'+h); }
+    if (hasAbility('moonwell') && pct < 0.7 && ready('moonwell')){ const h = Math.round(maxHp()*0.45*apow); healPlayer(h); setCd('moonwell',9); fx.push('🌊 Moonwell +'+h); }
+    if (cid==='rogue' && pct < 0.35 && ready('evasion')){ combat.dodge = 2; setCd('evasion',8); fx.push('💨 Evasion!'); }
+    if (cid==='paladin' && pct < 0.3 && ready('shield')){ combat.immune = 2; setCd('shield',10); fx.push('🛡️ Divine Shield!'); }
+    if (cid==='paladin' && pct < 0.15 && !combat.layUsed){ P().hp = maxHp(); combat.layUsed = true; fx.push('🙌 Lay on Hands!'); }
+  }
+  /* --- auto-eat --- */
+  if (P().hp > 0 && P().hp < maxHp()*0.6){
+    const foods = Object.keys(P().inv).filter(k => FOOD[k]).sort((a,b) => FOOD[b]-FOOD[a]);
+    if (foods.length){
+      const f = foods[0];
+      const heal = Math.round(FOOD[f] * (1 + statVal('foodheal')/100));
+      P().inv[f]--; if (P().inv[f] <= 0) delete P().inv[f];
+      healPlayer(heal); fx.push(`🍽️ ate ${ITEMS[f].n} +${heal}`);
+      if (f.startsWith('r_')){ combat.buffs.dmg = {mult:HEARTY_BUFF.mult, rounds:HEARTY_BUFF.rounds}; fx.push('🍲 Hearty! +10% dmg'); }
+      renderInv();
+    }
+  }
+  if (combat.buffs.dmg && --combat.buffs.dmg.rounds <= 0) delete combat.buffs.dmg;
+
+  /* --- player death --- */
+  if (P().hp <= 0){
+    P().hp = Math.max(1, Math.ceil(maxHp()*0.3));
+    log(`<span class="bad">☠️ The ${mon.n} bests you — you retreat to safety. (Nothing lost.)</span>`);
+    toast('You retreat! Rest up or eat.');
+    stopAction(); renderHeader(); return;
+  }
+  updateCombatBox(fx.join(' · '));
+  renderHeader();
+}
+
+/* ---------- vendors ---------- */
+function ensureVendorStock(){
+  if (net.connected && net.role === 'join'){ if (!state.vendorStock) state.vendorStock = {}; return; }
+  const now = Date.now();
+  if (!state.vendorStock || now >= (state.vendorRestockAt||0)){
+    state.vendorStock = {};
+    for (const loc of LOCATIONS) if (loc.kind==='city')
+      for (const v of loc.vendors){
+        const s = {};
+        for (const [item,min,max,ch] of v.pool)
+          if (Math.random() <= ch) s[item] = min + Math.floor(Math.random()*(max-min+1));
+        state.vendorStock[v.id] = s;
+      }
+    state.vendorRestockAt = now + 3600e3;
+  }
+}
+function buyItem(vid, item, qty){
+  ensureVendorStock();
+  const stock = state.vendorStock[vid] || {};
+  qty = Math.min(qty, stock[item]||0);
+  if (qty <= 0){ toast('Sold out!'); return; }
+  const price = Math.ceil(ITEMS[item].v * 1.4);
+  const afford = Math.floor(P().gold / price);
+  qty = Math.min(qty, afford);
+  if (qty <= 0){ toast('Not enough gold'); return; }
+  P().gold -= price*qty;
+  stock[item] -= qty; if (stock[item] <= 0) delete stock[item];
+  addItem(item, qty);
+  netSend({type:'vendorOp', vid, item, qty});
+  log(`Bought ${qty}× ${ITEMS[item].n} for <span class="bad">−${(price*qty).toLocaleString()} gp</span>`);
+  renderHeader(); renderInv(); renderLocation();
+}
+
+/* ---------- equipment ---------- */
+function canEquip(id){
+  const e = EQUIP[id]; if (!e) return 'Not equipment';
+  const cls = classOf(P()); if (!cls) return 'Choose a class first';
+  if (e.cls !== 'any' && e.cls !== cls.style) return `${cls.n}s can't use this`;
+  if (levelFor(P().xp[e.reqSkill]) < e.req) return `Needs ${e.reqSkill} ${e.req}`;
+  return null;
+}
+function equipItem(id){
+  const err = canEquip(id); if (err){ toast(err); return; }
+  const e = EQUIP[id];
+  const cur = P().gear[e.slot]; if (cur) addItem(cur);
+  P().inv[id]--; if (P().inv[id] <= 0) delete P().inv[id];
+  P().gear[e.slot] = id;
+  toast('Equipped '+ITEMS[id].n);
+  renderInv(); renderHeader();
+}
+function unequipItem(slot){
+  const id = P().gear[slot]; if (!id) return;
+  P().gear[slot] = null; addItem(id);
+  renderInv(); renderHeader();
+}
+
+/* ---------- talents & class ---------- */
+function chooseClass(cid){
+  P().class = cid; P().talents = {0:{},1:{}};
+  const c = CLASSES[cid];
+  log(`${c.i} You are now a <span class="lvl">${c.n}</span>. ${c.flavor}`);
+  toast(`${c.i} ${c.n}!`);
+  renderAll();
+}
+function spendTalent(bi, i){
+  const cls = classOf(P()); if (!cls) return;
+  const br = cls.branches[bi], t = br.talents[i], rank = (P().talents[bi]||{})[i]||0;
+  if (rank >= t.max) return;
+  if (talentPointsTotal() - talentPointsSpent() <= 0){ toast('No talent points available — level your combat skills!'); return; }
+  const tier = Math.floor(i/2);
+  if (branchPoints(bi) < tier*2){ toast(`Spend ${tier*2} points in ${br.n} first`); return; }
+  P().talents[bi][i] = rank + 1;
+  const pts = branchPoints(bi);
+  for (const a of br.abilities)
+    if (pts === a.at){ log(`${a.i} <span class="lvl">Route ability unlocked: ${a.n}!</span> ${a.d}`); toast(`${a.i} ${a.n} unlocked!`); }
+  toast(`${t.n} → rank ${rank+1}`);
+  renderLocation(); renderHeader();
+}
+function resetTalents(){ P().talents = {0:{},1:{}}; toast('Talents reset — points refunded'); renderLocation(); renderHeader(); }
+function abandonClass(){
+  for (const s of ['weapon','helm','body','legs']){ const id = P().gear[s]; if (id) addItem(id); }
+  P().gear = {weapon:null, helm:null, body:null, legs:null};
+  P().class = null; P().talents = {0:{},1:{}};
+  toast('Class abandoned — gear returned to pack');
+  renderAll();
+}
+
+/* =====================================================================
+   LAN CO-OP — WebRTC peer-to-peer, no server, codes swapped by hand
+===================================================================== */
+let net = {pc:null, dc:null, role:null, stage:null, connected:false, remoteId:null, remoteName:null, remotePos:''};
+let netTimer = null;
+const b64e = o => btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+const b64d = s => JSON.parse(decodeURIComponent(escape(atob(s.trim()))));
+function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function lanUi(status, out){
+  document.getElementById('lanStatus').innerHTML = status;
+  if (out !== undefined) document.getElementById('lanOut').value = out;
+}
+function openLan(){
+  const box = document.getElementById('lanBox');
+  box.style.display = box.style.display === 'block' ? 'none' : 'block';
+}
+function waitIce(pc){
+  return new Promise(res => {
+    if (pc.iceGatheringState === 'complete') return res();
+    const t = setTimeout(res, 3500);
+    pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete'){ clearTimeout(t); res(); } };
+  });
+}
+function newPc(){ return new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]}); }
+async function lanHost(){
+  if (!activeId){ toast('Pick your character first'); return; }
+  lanDisconnect(true);
+  net.role = 'host'; net.stage = 'wait-answer';
+  net.pc = newPc();
+  net.dc = net.pc.createDataChannel('embervale'); wireDc();
+  await net.pc.setLocalDescription(await net.pc.createOffer());
+  await waitIce(net.pc);
+  lanUi('1️⃣ Send this <b>invite code</b> to your partner (they press Join, paste it, Apply).<br>2️⃣ Then paste their <b>reply code</b> below and press Apply.', b64e(net.pc.localDescription));
+}
+function lanJoinPrompt(){
+  if (!activeId){ toast('Pick your character first'); return; }
+  lanDisconnect(true);
+  net.role = 'join'; net.stage = 'wait-offer';
+  lanUi("Paste the host's <b>invite code</b> below and press Apply. ⚠️ Joining replaces your local world with the host's.", '');
+}
+async function lanSubmitIn(){
+  const code = document.getElementById('lanIn').value.trim();
+  if (!code){ toast('Paste a code first'); return; }
+  try {
+    if (net.role === 'host' && net.stage === 'wait-answer'){
+      await net.pc.setRemoteDescription(b64d(code));
+      lanUi('Connecting…');
+    } else if (net.role === 'join' && net.stage === 'wait-offer'){
+      net.pc = newPc();
+      net.pc.ondatachannel = ev => { net.dc = ev.channel; wireDc(); };
+      await net.pc.setRemoteDescription(b64d(code));
+      await net.pc.setLocalDescription(await net.pc.createAnswer());
+      await waitIce(net.pc);
+      net.stage = 'sent-answer';
+      lanUi('Now send this <b>reply code</b> back to the host — once they Apply it, you\'re linked.', b64e(net.pc.localDescription));
+    } else { toast('Press Host or Join first'); return; }
+    document.getElementById('lanIn').value = '';
+  } catch(e){ toast("That code didn't work — check it and try again"); }
+}
+function wireDc(){
+  net.dc.onopen = () => {
+    net.connected = true;
+    if (net.role === 'host') netSend({type:'hello', name:P().name, activeId, state});
+    lanUi('🟢 <b>Connected!</b> Play on — everything syncs live.');
+    toast('📡 Partner connected!');
+    log('📡 <span class="lvl">LAN link established.</span>');
+    document.getElementById('chatRow').style.display = 'flex';
+    if (!netTimer) netTimer = setInterval(netSync, 2500);
+    renderHeader();
+  };
+  net.dc.onclose = () => lanDropped();
+  net.dc.onmessage = ev => { try { handleNet(JSON.parse(ev.data)); } catch(e){} };
+}
+function lanDropped(){
+  if (!net.connected) return;
+  net.connected = false; net.remotePos = '';
+  if (netTimer){ clearInterval(netTimer); netTimer = null; }
+  document.getElementById('chatRow').style.display = 'none';
+  lanUi('🔴 Link lost. Host again to reconnect.');
+  toast('📡 Partner disconnected');
+  log('📡 LAN link lost.');
+  renderHeader();
+}
+function lanDisconnect(silent){
+  const was = net.connected;
+  if (net.dc){ try{ net.dc.close(); }catch(e){} }
+  if (net.pc){ try{ net.pc.close(); }catch(e){} }
+  net = {pc:null, dc:null, role:null, stage:null, connected:false, remoteId:net.remoteId, remoteName:net.remoteName, remotePos:''};
+  if (netTimer){ clearInterval(netTimer); netTimer = null; }
+  document.getElementById('chatRow').style.display = 'none';
+  if (!silent){ lanUi('Not connected.'); if (was) toast('Disconnected'); }
+  renderHeader();
+}
+function netSend(o){ if (net.dc && net.dc.readyState === 'open'){ try{ net.dc.send(JSON.stringify(o)); }catch(e){} } }
+function actionLabel(){
+  if (combat) return '⚔️ fighting ' + curMon().n;
+  if (action && action.loc) return '⛏️ busy at ' + action.loc.n;
+  return '🌿 idle';
+}
+function netSync(){
+  if (!net.connected || !activeId) return;
+  netSend({type:'player', id:activeId, data:P(), pos:actionLabel()});
+  if (net.role === 'host') netSend({type:'vendors', vendorStock:state.vendorStock, vendorRestockAt:state.vendorRestockAt});
+}
+function handleNet(m){
+  if (m.type === 'hello'){                     /* joiner adopts the host's world */
+    stopAction();
+    state = migrateState(m.state);
+    net.remoteId = m.activeId; net.remoteName = m.name;
+    const myId = m.activeId === 'k' ? 'molly' : 'k';
+    netSend({type:'helloAck', activeId:myId, name:state.players[myId].name});
+    activeId = null;
+    startGame(myId);
+    log(`📡 Joined <b>${escapeHtml(m.name)}</b>'s world as <b>${P().name}</b>.`);
+  }
+  else if (m.type === 'helloAck'){
+    net.remoteId = m.activeId; net.remoteName = m.name;
+    log(`📡 <b>${escapeHtml(m.name)}</b> joined your world.`);
+    renderHeader();
+  }
+  else if (m.type === 'player'){
+    if (m.id !== activeId){
+      state.players[m.id] = migratePlayer(m.data, m.id === 'k' ? 'k' : 'Molly');
+      net.remoteId = m.id; net.remotePos = m.pos || ''; net.remoteName = state.players[m.id].name;
+      renderHeader();
+    }
+  }
+  else if (m.type === 'vendors'){
+    if (net.role === 'join'){
+      state.vendorStock = m.vendorStock; state.vendorRestockAt = m.vendorRestockAt;
+    }
+  }
+  else if (m.type === 'chestOp'){ chestDelta(m.items, m.gold, false); }
+  else if (m.type === 'vendorOp'){
+    const s = state.vendorStock && state.vendorStock[m.vid];
+    if (s && s[m.item] != null){
+      s[m.item] = Math.max(0, s[m.item] - m.qty);
+      if (!s[m.item]) delete s[m.item];
+      const loc = LOCATIONS.find(l => l.id === currentLoc);
+      if (loc && loc.kind === 'city') renderLocation();
+    }
+  }
+  else if (m.type === 'chat'){ log(`💬 <b>${escapeHtml(m.name)}:</b> ${escapeHtml(m.text)}`); }
+}
+function chestDelta(items, gold, broadcast = true){
+  state.chest.gold = Math.max(0, state.chest.gold + (gold||0));
+  for (const [k,q] of Object.entries(items||{})){
+    state.chest.items[k] = Math.max(0, (state.chest.items[k]||0) + q);
+    if (!state.chest.items[k]) delete state.chest.items[k];
+  }
+  if (broadcast) netSend({type:'chestOp', items, gold});
+  if (invView === 'chest') renderInv();
+}
+function sendChat(){
+  const inp = document.getElementById('chatInput');
+  const t = inp.value.trim(); if (!t) return;
+  inp.value = '';
+  log(`💬 <b>You:</b> ${escapeHtml(t)}`);
+  netSend({type:'chat', name:P().name, text:t});
+}
+
+/* ---------- log & toasts ---------- */
+function log(html){
+  const el = document.getElementById('log');
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  el.prepend(d);
+  while (el.children.length > 60) el.removeChild(el.lastChild);
+}
+function toast(msg){
+  const w = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  w.appendChild(t);
+  setTimeout(()=>t.remove(), 2700);
+}
+
+/* ---------- unsaved-progress guard ---------- */
+let unsavedEvents = 0;
+const _origLog = log;
+log = function(html){ unsavedEvents++; _origLog(html); };
+const _origOpenSave = openSave;
+openSave = function(){ _origOpenSave(); unsavedEvents = 0; };
+window.addEventListener('beforeunload', (e) => {
+  if (unsavedEvents > 3){ e.preventDefault(); e.returnValue = 'You have unsaved progress! Copy a Save code first.'; }
+});
+
+updateProfilePreviews();
+</script>
+</body>
+</html>
