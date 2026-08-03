@@ -2467,8 +2467,17 @@ function renderTabs(){ /* world edition: you navigate by walking the map */ }
 function fmtInputs(inp){
   return Object.entries(inp).map(([k,q])=>`${q}× ${ITEMS[k].n}`).join(', ');
 }
+/* materials count from pack AND vault — the bank works for you now */
+function matCount(k){ const p = P(); return (p.inv[k]||0) + ((p.bank||{})[k]||0); }
+function takeMat(k, q){
+  const p = P();
+  const fromPack = Math.min(q, p.inv[k]||0);
+  if (fromPack > 0){ p.inv[k] -= fromPack; if (p.inv[k] <= 0) delete p.inv[k]; }
+  const rest = q - fromPack;
+  if (rest > 0){ p.bank[k] = (p.bank[k]||0) - rest; if (p.bank[k] <= 0) delete p.bank[k]; }
+}
 function haveInputs(inp){
-  return Object.entries(inp).every(([k,q]) => (P().inv[k]||0) >= q);
+  return Object.entries(inp).every(([k,q]) => matCount(k) >= q);
 }
 
 function renderLocation(){
@@ -2831,11 +2840,11 @@ function sqTurnIn(q){
 /* =====================================================================
    THE MANOR — build menus, furniture functions, the butler
 ===================================================================== */
-function haveAllInp(inp){ return Object.entries(inp).every(([k,n]) => k === 'gold' ? P().gold >= n : (P().inv[k]||0) >= n); }
+function haveAllInp(inp){ return Object.entries(inp).every(([k,n]) => k === 'gold' ? P().gold >= n : matCount(k) >= n); }
 function payInp(inp){
   for (const [k,n] of Object.entries(inp)){
     if (k === 'gold'){ P().gold -= n; continue; }
-    P().inv[k] -= n; if (P().inv[k] <= 0) delete P().inv[k];
+    takeMat(k, n);
   }
 }
 function fmtInp(inp){
@@ -6804,7 +6813,7 @@ function toggleBags(){
   el.style.display = opening ? 'block' : 'none';
   if (opening){ if (invView === 'bank') invView = 'inv'; setInvView(invView); }
 }
-function haveMats(inp){ return Object.entries(inp||{}).every(([k,q]) => (P().inv[k]||0) >= q); }
+function haveMats(inp){ return Object.entries(inp||{}).every(([k,q]) => matCount(k) >= q); }
 /* ---- the rich item tooltip: hover anything in a bag, bank or gear grid ---- */
 function bagTipHTML(k, act){
   const it = ITEMS[k]; if (!it) return '';
@@ -7050,7 +7059,7 @@ function TX(){ return TESTER() ? TEST_MULT : 1; }
 function gain(k, q=1){ addItem(k, q*TX()); return q*TX(); }
 function gainGold(n){ n = Math.round(n*TX()); P().gold += n; return n; }
 function consume(inp){
-  for (const [k,q] of Object.entries(inp)){ P().inv[k] -= q; if (P().inv[k]<=0) delete P().inv[k]; }
+  for (const [k,q] of Object.entries(inp)) takeMat(k, q);
 }
 
 /* =====================================================================
@@ -7098,9 +7107,9 @@ function depositStation(loc, e){
   if (p.jobs[sid]){ toast(st.busy); return; }
   if (recipeGuildLocked(e)){ toast('🔒 A guild secret — you have not earned this recipe.'); return; }
   let n = STATION_MAX;
-  for (const [k,q] of Object.entries(e.inp)) n = Math.min(n, Math.floor((p.inv[k]||0)/q));
+  for (const [k,q] of Object.entries(e.inp)) n = Math.min(n, Math.floor(matCount(k)/q));
   if (n < 1){ toast(`You need: ${fmtInputs(e.inp)}`); return; }
-  for (const [k,q] of Object.entries(e.inp)){ p.inv[k] -= q*n; if (p.inv[k] <= 0) delete p.inv[k]; }
+  for (const [k,q] of Object.entries(e.inp)) takeMat(k, q*n);
   const each = stationTime(loc.skill, e);
   p.jobs[sid] = {id:e.id, qty:n, each, start:Date.now(), skill:loc.skill};
   log(`${st.i} You load ${n}× ${ITEMS[e.id].n} into ${st.n}. <span class="good">Ready in ${fmtDur(n*each*1000)} — wander off, it'll keep working.</span>`);
