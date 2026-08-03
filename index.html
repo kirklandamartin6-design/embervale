@@ -577,6 +577,9 @@
       </div>
       <div id="lanBox">
         <div class="abLabel"><b style="color:var(--gold)">📡 Play together — live</b><span></span></div>
+        <div id="lobbyArea"></div>
+        <details id="lanManual" style="margin-top:8px">
+        <summary class="invHint" style="cursor:pointer">✉️ Manual codes (backup — works even when the lobby can't)</summary>
         <div class="invHint" id="lanStatus">One of you makes an invite; the other pastes it and sends back the reply. Two short codes by text and you're in the same world, each playing your own character.</div>
         <div id="lanSteps">
           <div class="lanStep" id="lanStep1"><b>1</b> One of you presses <b>Make an invite</b> and texts the code over.</div>
@@ -595,6 +598,7 @@
           <button class="btn small" style="margin-top:4px" onclick="lanCopyOut()">📋 Copy code</button>
         </div>
         <textarea id="lanIn" placeholder="Paste the code your partner sent you, then press Connect"></textarea>
+        </details>
       </div>
       <div id="chatRow">
         <input id="chatInput" placeholder="Message your partner… (Enter to send)" onkeydown="if(event.key==='Enter')sendChat()">
@@ -16139,6 +16143,7 @@ async function lanPasteIn(){
 function openLan(){
   const box = document.getElementById('lanBox');
   box.style.display = box.style.display === 'block' ? 'none' : 'block';
+  if (box.style.display === 'block') lobbyStart();
 }
 function waitIce(pc){
   return new Promise(res => {
@@ -16148,6 +16153,223 @@ function waitIce(pc){
   });
 }
 function newPc(){ return new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]}); }
+
+/* =====================================================================
+   THE LOBBY — click a name instead of swapping codes.
+   Discovery rides a public MQTT broker over WSS: everyone behind the same
+   public IP lands in the same room, so "your network" simply see each other.
+   The game link itself is still direct WebRTC, exactly as before — the
+   broker only carries the 2-message handshake. No lobby? Codes still work.
+===================================================================== */
+const LOBBY_BROKERS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081'];
+let lobby = null;
+/* --- a hand-rolled, just-enough MQTT 3.1.1 client (QoS 0 only) --- */
+function mqEncStr(str){ const b = new TextEncoder().encode(str); const o = new Uint8Array(b.length+2); o[0]=b.length>>8; o[1]=b.length&255; o.set(b,2); return o; }
+function mqLen(n){ const o=[]; do{ let d=n%128; n=Math.floor(n/128); if(n>0)d|=128; o.push(d); }while(n>0); return o; }
+function mqPacket(hdr, ...parts){ const body=[].concat(...parts.map(p=>Array.from(p))); return new Uint8Array([hdr, ...mqLen(body.length), ...body]); }
+function mqttOpen(url, h){
+  let ws; try{ ws = new WebSocket(url, 'mqtt'); }catch(e){ setTimeout(h.onDown, 0); return null; }
+  ws.binaryType = 'arraybuffer';
+  let carry = new Uint8Array(0);
+  ws.onopen = () => ws.send(mqPacket(0x10, [0,4], new TextEncoder().encode('MQTT'), [4, 2, 0, 90], mqEncStr('emb_'+Math.random().toString(36).slice(2,10))));
+  ws.onerror = () => h.onDown();
+  ws.onclose = () => h.onDown();
+  ws.onmessage = ev => {
+    const inb = new Uint8Array(ev.data);
+    const buf = new Uint8Array(carry.length + inb.length); buf.set(carry); buf.set(inb, carry.length);
+    let i = 0;
+    while (i < buf.length){
+      if (buf.length - i < 2) break;
+      let len=0, mult=1, j=i+1, ok=false;
+      while (j < buf.length){ const d=buf[j]; len += (d&127)*mult; mult*=128; j++; if(!(d&128)){ ok=true; break; } }
+      if (!ok || buf.length < j+len) break;
+      const type = buf[i]>>4, body = buf.slice(j, j+len);
+      if (type === 2){ (body[1]===0) ? h.onReady() : h.onDown(); }
+      else if (type === 3){
+        const tl = (body[0]<<8)|body[1];
+        const topic = new TextDecoder().decode(body.slice(2, 2+tl));
+        try{ h.onMsg(topic, JSON.parse(new TextDecoder().decode(body.slice(2+tl)))); }catch(e){}
+      }
+      i = j + len;
+    }
+    carry = buf.slice(i);
+  };
+  return {
+    sub(t){ ws.send(mqPacket(0x82, [0, 1+Math.floor(Math.random()*250)], mqEncStr(t), [0])); },
+    pub(t, o){ ws.send(mqPacket(0x30, mqEncStr(t), new TextEncoder().encode(JSON.stringify(o)))); },
+    ping(){ try{ ws.send(new Uint8Array([0xC0, 0])); }catch(e){} },
+    close(){ try{ ws.onclose = null; ws.close(); }catch(e){} },
+  };
+}
+/* the room: everyone behind the same public IP hashes to the same id */
+async function lobbyRoomId(){
+  if (window.LOBBY_ROOM) return window.LOBBY_ROOM;
+  const grab = async url => {
+    const c = new AbortController(); const t = setTimeout(()=>c.abort(), 4000);
+    try{ const r = await fetch(url, {signal:c.signal}); const txt = (await r.text()).trim(); clearTimeout(t); return txt; }
+    catch(e){ clearTimeout(t); return null; }
+  };
+  const ip = await grab('https://api.ipify.org') || await grab('https://ipv4.icanhazip.com');
+  if (!ip || !/^[0-9a-f.:]{3,45}$/i.test(ip)) return 'open';
+  let hsh = 2166136261;
+  for (const ch of ip){ hsh ^= ch.charCodeAt(0); hsh = Math.imul(hsh, 16777619) >>> 0; }
+  return hsh.toString(36);
+}
+async function lobbyStart(){
+  if (!activeId) return;
+  if (lobby && lobby.alive) { renderLobby(); return; }
+  lobbyStop();
+  lobby = {uid:'u'+Math.random().toString(36).slice(2,10), room:null, seen:{}, invite:null, pendingTo:null,
+           cli:null, timer:null, alive:true, status:'🔍 Finding your network…'};
+  renderLobby();
+  const room = await lobbyRoomId();
+  if (!lobby || !lobby.alive) return;
+  lobby.room = room;
+  lobbyDial((window.LOBBY_BROKERS || LOBBY_BROKERS).slice());
+}
+function lobbyDial(list){
+  if (!lobby || !lobby.alive) return;
+  const url = list.shift();
+  if (!url){
+    lobby.status = "🔴 Couldn't reach the lobby (no internet?). The manual codes below still work.";
+    renderLobby(); return;
+  }
+  lobby.status = '🔍 Joining the lobby…'; renderLobby();
+  const base = 'emb1/' + lobby.room, me = lobby;
+  let settled = false;
+  const cli = mqttOpen(url, {
+    onReady(){
+      if (settled || lobby !== me || !me.alive){ if(!settled){settled=true;} try{cli.close();}catch(e){} return; }
+      settled = true; me.cli = cli;
+      cli.sub(base + '/p'); cli.sub(base + '/u/' + me.uid);
+      const beat = () => {
+        if (lobby !== me || !me.alive || me.cli !== cli) return;
+        try{ cli.pub(base + '/p', {f:me.uid, n:P().name, v:NET_VERSION, busy:net.connected?1:0}); cli.ping(); }catch(e){}
+        const now = Date.now();
+        for (const k of Object.keys(me.seen)) if (now - me.seen[k].t > 8000) delete me.seen[k];
+        renderLobby();
+      };
+      me.timer = setInterval(beat, 2500); beat();
+      me.status = '🟢 In the lobby — anyone on your network running the game shows up below.';
+      renderLobby();
+    },
+    onMsg(topic, m){ if (lobby === me && me.alive) lobbyOnMsg(topic, m); },
+    onDown(){
+      if (!settled){ settled = true; lobbyDial(list); }
+      else if (lobby === me && me.alive && me.cli === cli){
+        me.cli = null; if (me.timer){ clearInterval(me.timer); me.timer = null; }
+        me.status = '🔴 Lost the lobby. <button class="btn small" onclick="lobbyRetry()">↻ Rejoin</button>';
+        renderLobby();
+      }
+    },
+  });
+  setTimeout(() => { if (!settled){ settled = true; try{cli && cli.close();}catch(e){} lobbyDial(list); } }, 6000);
+}
+function lobbyRetry(){ lobbyStop(); lobbyStart(); }
+function lobbyStop(){
+  if (!lobby) return;
+  lobby.alive = false;
+  if (lobby.timer) clearInterval(lobby.timer);
+  if (lobby.cli) lobby.cli.close();
+  lobby = null;
+}
+function lobbySend(to, obj){ if (lobby && lobby.cli) try{ lobby.cli.pub('emb1/' + lobby.room + '/u/' + to, obj); }catch(e){} }
+function lobbyOnMsg(topic, m){
+  if (!m || typeof m !== 'object' || m.f === lobby.uid) return;
+  if (topic.endsWith('/p')){ lobby.seen[m.f] = {n:String(m.n||'?').slice(0,24), v:m.v, busy:m.busy, t:Date.now()}; renderLobby(); return; }
+  if (m.k === 'inv'){
+    if (m.v !== NET_VERSION){ lobbySend(m.f, {k:'dec', f:lobby.uid, n:P().name, why:'ver'}); return; }
+    lobby.invite = {f:m.f, n:String(m.n||'?').slice(0,24), sdp:m.sdp, t:Date.now()};
+    toast('🔗 ' + lobby.invite.n + ' wants to link!');
+    log('📡 <b>' + escapeHtml(lobby.invite.n) + '</b> wants to link worlds — accept in the 📡 LAN panel.');
+    renderLobby();
+  }
+  else if (m.k === 'acc' && lobby.pendingTo === m.f) lobbyFinish(m);
+  else if (m.k === 'dec' && lobby.pendingTo === m.f){
+    lobby.pendingTo = null;
+    lobby.status = m.why === 'ver'
+      ? '⚠️ You are on <b>different versions</b> of the game — both refresh to the newest build, then try again.'
+      : '🙅 ' + escapeHtml(m.n || 'They') + ' declined. No hard feelings.';
+    renderLobby();
+  }
+}
+async function lobbyConnectTo(uid){
+  if (!lobby || !lobby.seen[uid]) return;
+  const who = lobby.seen[uid];
+  try {
+    lanDisconnect(true);
+    net.role = 'host'; net.stage = 'wait-answer';
+    net.pc = newPc(); net.dc = net.pc.createDataChannel('embervale'); wireDc();
+    await net.pc.setLocalDescription(await net.pc.createOffer());
+    await waitIce(net.pc);
+    if (!lobby) return;
+    lobby.pendingTo = uid;
+    lobby.status = '⏳ Asked <b>' + escapeHtml(who.n) + '</b> — waiting for them to press Accept on their screen…';
+    lobbySend(uid, {k:'inv', f:lobby.uid, n:P().name, v:NET_VERSION, sdp:netEncode(net.pc.localDescription)});
+  } catch(e){ if (lobby){ lobby.status = '❌ Could not start the link — try again.'; } }
+  renderLobby();
+}
+async function lobbyAccept(){
+  if (!lobby || !lobby.invite) return;
+  const inv = lobby.invite; lobby.invite = null;
+  try {
+    lanDisconnect(true);
+    net.role = 'join'; net.stage = 'wait-offer';
+    net.pc = newPc(); net.pc.ondatachannel = ev => { net.dc = ev.channel; wireDc(); };
+    await net.pc.setRemoteDescription(netDecode(inv.sdp).desc);
+    await net.pc.setLocalDescription(await net.pc.createAnswer());
+    await waitIce(net.pc);
+    if (!lobby) return;
+    lobby.status = '🤝 Accepted — linking with <b>' + escapeHtml(inv.n) + '</b>…';
+    lobbySend(inv.f, {k:'acc', f:lobby.uid, n:P().name, sdp:netEncode(net.pc.localDescription)});
+  } catch(e){ if (lobby){ lobby.status = '❌ The link failed — ask them to try again.'; } }
+  renderLobby();
+}
+function lobbyDecline(){
+  if (!lobby || !lobby.invite) return;
+  lobbySend(lobby.invite.f, {k:'dec', f:lobby.uid, n:P().name});
+  lobby.invite = null;
+  renderLobby();
+}
+async function lobbyFinish(m){
+  try {
+    await net.pc.setRemoteDescription(netDecode(m.sdp).desc);
+    lobby.pendingTo = null;
+    lobby.status = '🤝 <b>' + escapeHtml(m.n) + '</b> accepted — linking…';
+  } catch(e){ lobby.pendingTo = null; lobby.status = '❌ The link failed — try once more.'; }
+  renderLobby();
+}
+function renderLobby(){
+  const el = document.getElementById('lobbyArea');
+  if (!el) return;
+  if (!lobby){ el.innerHTML = ''; return; }
+  let h = '<div class="invHint">' + lobby.status + '</div>';
+  if (net.connected)
+    h += '<div class="invHint">🟢 <b>Linked with ' + escapeHtml(net.remoteName || 'your partner') + '</b> — everything syncs live.</div>';
+  if (lobby.invite)
+    h += '<div style="border:1px solid var(--gold);border-radius:8px;padding:8px;margin:6px 0;">'
+       + '🔗 <b style="color:var(--gold)">' + escapeHtml(lobby.invite.n) + '</b> wants to link worlds with you.'
+       + '<div style="display:flex;gap:6px;margin-top:6px">'
+       + '<button class="btn small" onclick="lobbyAccept()">✅ Accept</button>'
+       + '<button class="btn small" onclick="lobbyDecline()">✖ Decline</button></div></div>';
+  const ids = Object.keys(lobby.seen);
+  if (ids.length){
+    h += '<div class="invHint" style="margin-top:4px"><b>On your network:</b></div>';
+    for (const id of ids){
+      const w = lobby.seen[id];
+      const tag = w.v !== NET_VERSION ? ' <span class="bad">(other version)</span>' : w.busy ? ' <span style="opacity:.6">(already linked)</span>' : '';
+      const can = w.v === NET_VERSION && !net.connected && lobby.pendingTo !== id;
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">'
+         + '<span>🧑‍🌾</span><span style="flex:1"><b>' + escapeHtml(w.n) + '</b>' + tag + '</span>'
+         + (lobby.pendingTo === id ? '<span class="invHint">⏳ asked…</span>'
+            : '<button class="btn small" ' + (can ? '' : 'disabled style="opacity:.4" ') + 'onclick="lobbyConnectTo(\'' + id + '\')">🔗 Connect</button>')
+         + '</div>';
+    }
+  } else if (!lobby.invite && !net.connected){
+    h += '<div class="invHint" style="opacity:.75">Nobody else yet — have Molly open the game and press 📡 LAN. She\'ll appear here within a few seconds.</div>';
+  }
+  el.innerHTML = h;
+}
 async function lanInvite(){
   if (!activeId){ toast('Pick your character first'); return; }
   lanDisconnect(true);
@@ -16217,6 +16439,7 @@ function wireDc(){
     lanUi('🟢 <b>Connected!</b> Play on — everything syncs live. Chat is at the bottom of this panel.', '');
     toast('📡 Partner connected!');
     log('📡 <span class="lvl">LAN link established.</span>');
+    if (lobby){ lobby.pendingTo = null; lobby.invite = null; lobby.status = '🟢 <b>Linked!</b> Close this panel and play.'; renderLobby(); }
     document.getElementById('chatRow').style.display = 'flex';
     if (!netTimer) netTimer = setInterval(netSync, 2500);
     renderHeader();
