@@ -1569,7 +1569,7 @@ const PETS = [
   {id:'pet_carp',      n:'Bruiser the Gloomcarp',     i:'🐟', src:'quest_nan'},
   {id:'pet_wyrmling',  n:'Rax the Wyrmling',          i:'🐲', src:'boss_skyfather'},
   {id:'pet_mole',      n:'Turnip the Mole',           i:'🦔', src:'farming'},
-  {id:'pet_loom',      n:'Loomling the Grave Weaver', i:'🕸️', src:'anykill'},
+  {id:'pet_loom',      n:'Loomling the Grave Weaver', i:'🕷️', src:'anykill'},
   {id:'pet_sprig',     n:'Sprig the Seedling',        i:'🌱', src:'quest_guild'},
   {id:'pet_karst',     n:'Karst the Cave Wyrmlet',    i:'🪨', src:'quest_guild'},
   {id:'pet_brine',     n:'Brine the Sea Sprite',      i:'🫧', src:'quest_guild'},
@@ -15619,6 +15619,8 @@ function drawMap(){
     if (petId in DOG_PETS){
       drawDog(pcx, sy(petRendPos.y)+TILE*0.8, TILE*0.15, DOG_PETS[petId]);
     } else {
+      ctx.beginPath(); ctx.fillStyle = 'rgba(255,244,214,.18)';
+      ctx.arc(pcx, pcy - TILE*0.04, TILE*0.15, 0, Math.PI*2); ctx.fill();
       ctx.font = Math.round(19*S)+'px serif';
       ctx.fillText(ITEMS[petId].i, pcx, pcy);
     }
