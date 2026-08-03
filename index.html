@@ -1693,10 +1693,10 @@ const MONSTERS = [
   {id:'jack',   n:"Jack-o'-Lantern",i:'🎃', hp:100,atk:52,def:45,mh:14,gold:[90,190],  loot:[['ember_gourd',.32],['blossom_logs',.1]],lvl:26,tier:2,den:'The Rotting Patch'},
   {id:'widow',  n:'Gravewidow',     i:'🕷️',hp:118,atk:57,def:50,mh:16,gold:[110,230], loot:[['grave_silk',.3],['uncut_emerald',.05]],lvl:29,tier:2,den:'The Silken Barrow'},
   /* the Brood Hollow — Hallowmere's silk mine (v67): every one of them pays in thread */
-  {id:'broodling',  n:'Broodling',        i:'🕷️',hp:100,atk:52,def:44,mh:14,gold:[80,180],  loot:[['grave_silk',.5]],lvl:27,tier:2},
-  {id:'silkspinner',n:'Silk Spinner',     i:'🕷️',hp:150,atk:62,def:54,mh:18,gold:[140,280], loot:[['grave_silk',.65],['uncut_emerald',.06]],lvl:30,tier:3},
-  {id:'palewidow',  n:'Pale Widow',       i:'🕷️',hp:200,atk:74,def:64,mh:22,gold:[240,460], loot:[['grave_silk',.8],['uncut_ruby',.06]],lvl:32,tier:3},
-  {id:'broodmother',n:'The Broodmother',  i:'🕸️',hp:380,atk:86,def:76,mh:26,gold:[1300,2500],loot:[['grave_silk',1],['goldspun_thread',.25],['uncut_ruby',.3]],lvl:34,tier:5,boss:true},
+  {id:'broodling',  n:'Broodling',        i:'🕷️',hp:100,atk:52,def:44,mh:14,gold:[80,180],  loot:[['grave_silk',1]],lvl:27,tier:2},
+  {id:'silkspinner',n:'Silk Spinner',     i:'🕷️',hp:150,atk:62,def:54,mh:18,gold:[140,280], loot:[['grave_silk',1],['grave_silk',.3],['uncut_emerald',.12]],lvl:30,tier:3},
+  {id:'palewidow',  n:'Pale Widow',       i:'🕷️',hp:200,atk:74,def:64,mh:22,gold:[240,460], loot:[['grave_silk',1],['grave_silk',.6],['uncut_ruby',.12]],lvl:32,tier:3},
+  {id:'broodmother',n:'The Broodmother',  i:'🕸️',hp:380,atk:86,def:76,mh:26,gold:[1300,2500],loot:[['grave_silk',1],['grave_silk',1],['goldspun_thread',.5],['uncut_ruby',.6]],lvl:34,tier:5,boss:true},
   {id:'vampire',n:'Pale Vampire',   i:'🧛', hp:142,atk:64,def:58,mh:18,gold:[170,340], loot:[['grave_dust',.3],['uncut_ruby',.06]],lvl:33,tier:3,den:'Hollowmere Crypt'},
   {id:'hangman',    n:'The Hanged Man',  i:'🪢', hp:190,atk:74,def:64,mh:22,gold:[300,600], loot:[['grave_dust',.6],['doubloon',.3],['uncut_ruby',.1]],lvl:33,tier:3},
   {id:'hollowman',  n:'The Hollow Man',   i:'🕴️',hp:250,atk:82,def:72,mh:25,gold:[500,1000],loot:[['grave_dust',.8],['grave_silk',.6],['uncut_diamond',.12]],lvl:35,tier:4},
@@ -2267,7 +2267,7 @@ function newPlayer(name){
   return {name, xp, inv:{}, bank:{}, gold:25, class:null, hp:10, jobs:{}, buffs:{}, mapX:56, mapY:44,
           gear:{weapon:null, helm:null, body:null, legs:null, pet:null, tool:null, mount:null}, talents:{0:{},1:{}}, kills:{}, raids:{},
           eggsFound:{}, eggsReturned:0, mermaidMet:false, finnickDone:false, faeDone:false, bramDone:{},
-          lanterns:{}, chain:0, dugCount:0, rainbowFound:{}, buyback:[],
+          lanterns:{}, chain:0, dugCount:0, rainbowFound:{}, buyback:[], found:{},
           house:{rooms:{4:'hall'}, furn:{}, pets:[], garden:null, restedUntil:0, butlerAt:0}};
 }
 function migratePlayer(p, name){
@@ -2292,6 +2292,13 @@ function migratePlayer(p, name){
   if (typeof p.dugCount !== 'number') p.dugCount = 0;
   if (!p.rainbowFound) p.rainbowFound = {};
   if (!Array.isArray(p.buyback)) p.buyback = [];
+  p.found = p.found || {};
+  for (const arr of [PETS, MOUNTS])
+    for (const it of arr){
+      const id = it.id;
+      if ((p.inv && p.inv[id]) || (p.bank && p.bank[id]) || Object.values(p.gear||{}).includes(id)
+          || ((p.house && p.house.pets)||[]).includes(id)) p.found[id] = 1;
+    }
   if (!p.house) p.house = {rooms:{4:'hall'}, furn:{}, garden:null, restedUntil:0, butlerAt:0};
   if (!p.house.rooms || !p.house.rooms[4]) p.house.rooms = Object.assign({4:'hall'}, p.house.rooms||{});
   p.house.furn = p.house.furn || {};
@@ -3671,7 +3678,7 @@ function riftMonFor(wave){
           mh:Math.max(1, Math.round(m.mh*(1 + wave*0.02))),
           gold:[Math.round(m.gold[0]*grow), Math.round(m.gold[1]*grow)]};
 }
-function riftTokensFor(wave){ return 3 + Math.floor(wave/10); }
+function riftTokensFor(wave){ return 4 * Math.pow(2, Math.max(0, Math.floor(wave/10) - 1)); }   /* doubles every 10 waves: 4, 8, 16, 32, 64… */
 let riftUiTimer = null;
 function riftArenaOpen(){
   const ov = document.getElementById('overlay');
@@ -7030,7 +7037,11 @@ function moveItem(k){
   to[k] = (to[k]||0) + q; delete from[k];
   renderInv(); if (currentLoc==='shop') renderLocation();
 }
-function addItem(k, q=1){ P().inv[k] = (P().inv[k]||0) + q; }
+function addItem(k, q=1){
+  P().inv[k] = (P().inv[k]||0) + q;
+  const e = EQUIP[k];
+  if (e && (e.pet || e.mount)){ P().found = P().found || {}; P().found[k] = 1; }   /* the Book remembers */
+}
 /* ---- 🔧 test profile: everything you obtain arrives ×10 ---- */
 const AVATAR = {k:'🧙‍♂️', molly:'🧝‍♀️', tester:'🔧'};
 const TEST_MULT = 10;
@@ -9527,8 +9538,19 @@ function bookSections(){
         (RAINBOW_ID[id]
           ? `. Not made and not sold — it turns up in the work itself, about 1 action in ${Math.round(1/RAINBOW_CHANCE)}, once you are level ${e.req} in ${SKILL_NAME(RAINBOW_ID[id]).toLowerCase()}. You will only ever find one.`
           : e.tool ? '.' : `. The Enchanter can reinforce it for +35% power.`)))
+      .map((rr, i2, arr2) => rr)
       .sort(byLvl),
     gearSkills:true});
+  /* rainbow tools you have found are claimable from the page if they ever go missing */
+  if (activeId){
+    const rf = P().rainbowFound || {};
+    const gearSec = secs.find(x => x.id === 'gear');
+    for (const [sk2, [rid2]] of Object.entries(RAINBOW)){
+      if (!rf[sk2]) continue;
+      const rr2 = gearSec.rows.find(x => x.name === ITEMS[rid2].n);
+      if (rr2) rr2.claim = rid2;
+    }
+  }
   /* ---- every companion in the realm: found or still out there ---- */
   const petSourceTxt = pt => {
     const sk = SKILLS.find(s => s.id === pt.src);
@@ -9564,20 +9586,22 @@ function bookSections(){
   const ownedNow = activeId ? ownedPets() : [];
   secs.push({id:'pets', n:'🐾 Pets', skill:null, pets:true,
     rows: PETS.map(pt => {
-      const owned = ownedNow.includes(pt);
+      const owned = ownedNow.includes(pt) || !!(activeId && (P().found||{})[pt.id]);
       const benefit = bonusText(EQUIP[pt.id]) || 'good company';
       const r = row(1, pt.i, pt.n, `${owned ? '✓ found' : 'still out there'} · ${benefit}`,
         `${pt.n} — ${benefit}. How to find: ${petSourceTxt(pt)}.` + (owned ? '' : ' (Not found yet.)'));
       r.met = owned;
+      if (owned) r.claim = pt.id;
       return r;
     }).sort((a,b) => (b.met?1:0)-(a.met?1:0)) });
   secs.push({id:'mounts', n:'🐎 Mounts', skill:null,
     rows: MOUNTS.map(mt => {
-      const owned = activeId ? hasMount(mt.id) : false;
+      const owned = activeId ? (hasMount(mt.id) || !!(P().found||{})[mt.id]) : false;
       const benefit = bonusText(EQUIP[mt.id]) || '';
       const r = row(1, mt.i, mt.n, `${owned ? '✓ tamed — +30% overworld speed' : 'still running free'}${benefit ? ' · '+benefit : ''}`,
         `${mt.n} — a super-rare mount. Ride it and the whole overworld goes by ~30% faster${benefit ? '; also '+benefit : ''}. How to find: ${mt.how}.` + (owned ? '' : ' (Not tamed yet.)'));
       r.met = owned;
+      if (owned) r.claim = mt.id;
       return r;
     }).sort((a,b) => (b.met?1:0)-(a.met?1:0)) });
   secs.push({id:'circle', n:"\u{1F3AF} Artisans' Circle", skill:null, circle:true,
@@ -9697,8 +9721,26 @@ function renderBook(){
     d.title = r.t || (sec.skill
       ? `${r.name} — unlocks at ${SKILLS.find(s=>s.id===sec.skill).n} level ${r.l}. ${r.extra}.`
       : `${r.name} — ${r.extra}.`);
+    if (r.claim && activeId){
+      d.style.cursor = 'pointer';
+      d.title += ' — CLICK to call it back to your pack if it has gone missing.';
+      d.onclick = () => bookClaim(r.claim);
+    }
     body.appendChild(d);
   }
+}
+/* 📖 the Book remembers what is yours: click a found companion, mount or
+   rainbow tool and, if you no longer hold it anywhere, it comes back to you. */
+function bookClaim(id){
+  const p = P();
+  const held = (p.inv[id]||0) > 0 || (p.bank && (p.bank[id]||0) > 0)
+            || Object.values(p.gear||{}).includes(id)
+            || ((p.house && p.house.pets)||[]).includes(id);
+  if (held){ toast(`${ITEMS[id].i} ${ITEMS[id].n} is already with you`); return; }
+  addItem(id);
+  log(`📖 <span class="good">${ITEMS[id].i} ${ITEMS[id].n} finds its way back to your pack.</span>`);
+  toast(`📖 ${ITEMS[id].n} returned`);
+  renderInv(); renderBook();
 }
 function toggleBook(){
   const m = document.getElementById('bookModal');
@@ -10991,7 +11033,9 @@ const DUNGEONS = {
     pillars:[[4,2],[4,8],[14,2],[14,8],[24,2],[24,8]],
     rocks:[],
     monsters:[['broodling',3,3,27,1],['broodling',6,7,28,1],['broodling',4,6,27,1],
+              ['broodling',2,2,27,1],['broodling',7,2,28,1],['broodling',6,4,27,1],
               ['silkspinner',12,3,30,'e2'],['silkspinner',17,7,31,'e2'],['palewidow',15,5,32,'e2'],
+              ['silkspinner',11,7,30,'e2'],['silkspinner',18,2,31,'e2'],['palewidow',12,6,33,'e2'],
               ['broodmother',24,5,34,3]],
     chests:[[26,5],[26,1]],
     torches:[[2,1],[7,1],[12,1],[18,1],[23,1],[2,9],[12,9],[23,9]],
