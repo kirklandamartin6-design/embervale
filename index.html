@@ -9734,13 +9734,37 @@ function renderBook(){
 /* 📖 the Book remembers what is yours: click a found companion, mount or
    rainbow tool and, if you no longer hold it anywhere, it comes back to you. */
 function bookClaim(id){
-  const p = P();
-  const held = (p.inv[id]||0) > 0 || (p.bank && (p.bank[id]||0) > 0)
-            || Object.values(p.gear||{}).includes(id)
-            || ((p.house && p.house.pets)||[]).includes(id);
-  if (held){ toast(`${ITEMS[id].i} ${ITEMS[id].n} is already with you`); return; }
+  const p = P(), e = EQUIP[id], nm = `${ITEMS[id].i} ${ITEMS[id].n}`;
+  /* already equipped — point at it */
+  if (Object.values(p.gear||{}).includes(id)){
+    toast(e.pet ? `${nm} is at your heel right now` : e.mount ? `You are riding ${ITEMS[id].n} right now` : `${nm} is equipped in your tool slot`);
+    return;
+  }
+  /* stabled in the manor menagerie — call the pet straight to your heel */
+  if (((p.house && p.house.pets)||[]).includes(id) && e.pet){
+    fetchPet(id);
+    log(`📖 <span class="good">${nm} comes bounding out of the menagerie and falls in at your heel.</span>`);
+    toast(`📖 ${ITEMS[id].n} — fetched from the menagerie`);
+    renderInv(); renderHeader(); renderBook();
+    return;
+  }
+  /* tucked in the bank vault — bring it to your pack */
+  if (p.bank && (p.bank[id]||0) > 0){
+    p.bank[id]--; if (p.bank[id] <= 0) delete p.bank[id];
+    addItem(id);
+    log(`📖 <span class="good">${nm} fetched from your vault to your pack.</span>`);
+    toast(`📖 ${ITEMS[id].n} — was in your vault`);
+    renderInv(); renderBook();
+    return;
+  }
+  /* already in the pack — just say so */
+  if ((p.inv[id]||0) > 0){
+    toast(`${nm} is in your pack — equip it from the 🛡️ Gear tab`);
+    return;
+  }
+  /* genuinely lost — it finds its way home */
   addItem(id);
-  log(`📖 <span class="good">${ITEMS[id].i} ${ITEMS[id].n} finds its way back to your pack.</span>`);
+  log(`📖 <span class="good">${nm} finds its way back to your pack.</span>`);
   toast(`📖 ${ITEMS[id].n} returned`);
   renderInv(); renderBook();
 }
