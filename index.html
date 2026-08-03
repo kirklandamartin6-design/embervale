@@ -8876,7 +8876,9 @@ function resetTalents(){ P().talents = {0:{},1:{}}; toast('Talents reset — poi
 function abandonClass(){
   document.getElementById('talentModal').style.display = 'none';
   for (const s of ['weapon','helm','body','legs']){ const id = P().gear[s]; if (id) addItem(id); }
-  P().gear = {weapon:null, helm:null, body:null, legs:null};
+  /* only class gear comes off — the pet at your heel, the tool in your belt and
+     the mount under you have no class and STAY EQUIPPED (they used to be destroyed here) */
+  for (const s of ['weapon','helm','body','legs']) P().gear[s] = null;
   P().class = null; P().talents = {0:{},1:{}};
   toast('Class abandoned — gear returned to pack');
   renderAll();
