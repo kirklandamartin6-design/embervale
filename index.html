@@ -529,7 +529,7 @@
     <div id="actionDock">
       <div id="abilityBar"></div>
       <div id="dockRow">
-        <span id="abilHint">1-5 abilities · scroll to zoom · F fps · G graphics</span>
+        <span id="abilHint">1-5 abilities · scroll to zoom · F fps · G graphics · L lighting</span>
         <button class="btn small" id="fleeBtn" onclick="stopAction()">🏃 Disengage</button>
       </div>
     </div>
@@ -10555,6 +10555,7 @@ document.addEventListener('keydown', (e) => {
   if (k === 'b'){ toggleBags(); return; }
   if (k === 'f'){ GFX.fps = !GFX.fps; toast('FPS meter ' + (GFX.fps?'on':'off')); return; }
   if (k === 'g'){ GFX.high = !GFX.high; invalidateTerrain(); toast('Graphics: ' + (GFX.high?'high':'fast')); return; }
+  if (k === 'l'){ LUM.on = !LUM.on; toast('Lighting: ' + (LUM.on?'on':'off')); return; }
   if (k === ' ' && combat && combat.windup > 0){ e.preventDefault(); bossInterrupt(); return; }
   if (combat && k >= '1' && k <= '6'){ e.preventDefault(); castByIndex(+k - 1); return; }
   if (WASD[k]){
@@ -13134,6 +13135,146 @@ function paintOverTerrainStatic(ctx, sx, sy, now, x0, y0, vw, vh){
 }
 /* the cache: repainted when the camera crosses the quantised origin, or every few frames for slow animations */
 const GFX = {high:true, fps:false, _t:[], _last:0};
+/* =====================================================================
+   LUMEN (v79) — the world gets lit instead of just drawn.
+     · every emitter (forge, lava, lantern, glowing bough, lit window)
+       registers a light; a shade layer is laid over the scene and the
+       lights burn holes in it, so light pools and falls off properly
+     · a second additive pass gives those emitters real bloom
+     · every standing thing casts a long shadow away from the sun, and
+       sits in its own pool of contact shadow — that's the depth
+     · each region gets a colour grade: Ashlands run hot, Hallowmere
+       runs cold and violet, Blossom Vale goes rose at the edges
+   L toggles the whole pass. Everything is gated on GFX.high as well.
+===================================================================== */
+const LUM = {
+  on: true, lights: [], cv: null, ctx: null, lv: null, lc: null, SC: 3,
+  SUN: {dx: 0.66, dy: 0.62},                  /* the direction shadows fall */
+  /* ambient shade + grade per region: [shadeR,G,B, shadeAlpha, gradeR,G,B, gradeAlpha, warmAlpha] */
+  GRADE: {
+    ash:     [ 34, 12,  6, 0.230, 255, 148,  86, 0.20, 0.022],
+    peak:    [ 16, 20, 34, 0.209, 168, 194, 232, 0.16, 0.009],
+    gloom:   [ 12,  7, 26, 0.266, 126, 106, 200, 0.22, 0.006],
+    frost:   [ 20, 32, 46, 0.187, 184, 216, 242, 0.18, 0.011],
+    forest:  [  9, 19,  8, 0.230,  84, 200, 122, 0.15, 0.012],
+    glade:   [  7, 17,  6, 0.238, 100, 214, 132, 0.16, 0.014],
+    wild:    [ 22, 18, 10, 0.209, 222, 192, 122, 0.14, 0.012],
+    town:    [ 18, 13,  8, 0.194, 255, 202, 138, 0.16, 0.016],
+    blossom: [ 26, 12, 22, 0.173, 255, 176, 210, 0.18, 0.017],
+    marsh:   [ 11, 19, 14, 0.230, 148, 200, 152, 0.16, 0.009],
+    coast:   [ 16, 21, 26, 0.166, 212, 222, 236, 0.14, 0.016],
+    province:[ 15, 19, 10, 0.194, 226, 216, 142, 0.14, 0.014],
+    meadow:  [ 18, 28, 40, 0.187, 190, 222, 246, 0.17, 0.009],
+    heart:   [ 11, 17, 10, 0.194, 212, 226, 152, 0.14, 0.014],
+    water:   [  9, 17, 28, 0.173, 150, 202, 236, 0.15, 0.011],
+    dungeon: [  7,  5, 12, 0.310, 148, 138, 170, 0.20, 0.005],
+  },
+  cast: 0, castMax: 140,
+  reset(){ this.lights.length = 0; this.cast = 0; },
+  /* one soft black blob, baked once — cheaper to stamp than to build a
+     fresh radial gradient for every tree on screen, every frame */
+  blob(){
+    if (this._blob) return this._blob;
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d').createRadialGradient(32,32,1,32,32,32);
+    g.addColorStop(0, 'rgba(0,0,0,1)');
+    g.addColorStop(0.45, 'rgba(0,0,0,.55)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    const cc = c.getContext('2d'); cc.fillStyle = g; cc.fillRect(0,0,64,64);
+    return (this._blob = c);
+  },
+  /* the key light, for stamping onto the sunward face of a thing */
+  lit(){
+    if (this._lit) return this._lit;
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const cc = c.getContext('2d');
+    const g = cc.createRadialGradient(32,32,1,32,32,32);
+    g.addColorStop(0, 'rgba(255,246,224,.95)');
+    g.addColorStop(0.4, 'rgba(255,236,196,.34)');
+    g.addColorStop(1, 'rgba(255,230,190,0)');
+    cc.fillStyle = g; cc.fillRect(0,0,64,64);
+    return (this._lit = c);
+  },
+  /* px,py are SCREEN pixels; r is a screen radius */
+  add(px, py, r, col, inten){
+    if (!this.on || !GFX.high) return;
+    if (this.lights.length > 96) return;                 /* a hard ceiling, so a lava field can't stall a frame */
+    this.lights.push([px, py, r, col, inten]);
+  },
+  grade(reg){ return this.GRADE[reg] || this.GRADE.heart; },
+  render(ctx, cv, reg, dim){
+    if (!this.on || !GFX.high) return;
+    const G = this.grade(reg), SC = this.SC;
+    const w = Math.max(1, Math.ceil(cv.width/SC)), h = Math.max(1, Math.ceil(cv.height/SC));
+    if (!this.cv){
+      this.cv = document.createElement('canvas'); this.ctx = this.cv.getContext('2d');
+      this.lv = document.createElement('canvas'); this.lc = this.lv.getContext('2d');
+    }
+    if (this.cv.width !== w || this.cv.height !== h){
+      this.cv.width = this.lv.width = w; this.cv.height = this.lv.height = h;
+    }
+    const s = this.ctx, l = this.lc;
+    /* Everything is built at half resolution and applied to the frame in
+       exactly two composites — one darkening, one additive. Doing the
+       grade as full-screen `overlay`/`multiply` fills cost 9ms a frame. */
+    s.setTransform(1/SC, 0, 0, 1/SC, 0, 0);
+    l.setTransform(1/SC, 0, 0, 1/SC, 0, 0);
+    s.globalCompositeOperation = 'source-over'; s.clearRect(0, 0, cv.width, cv.height);
+    l.globalCompositeOperation = 'source-over'; l.clearRect(0, 0, cv.width, cv.height);
+
+    /* ---- the shade, tinted with the region's own colour, holes burnt
+            through it by every light, then the vignette on top ---- */
+    const shade = G[3] * (1 - (dim||0)*0.55);
+    s.fillStyle = `rgba(${G[0]},${G[1]},${G[2]},${shade.toFixed(3)})`;
+    s.fillRect(0, 0, cv.width, cv.height);
+    s.globalCompositeOperation = 'destination-out';
+    for (let i=0; i<this.lights.length; i++){
+      const [px, py, r, , inten] = this.lights[i];
+      const g = s.createRadialGradient(px, py, r*0.06, px, py, r);
+      g.addColorStop(0,    `rgba(255,255,255,${Math.min(1, inten).toFixed(3)})`);
+      g.addColorStop(0.42, `rgba(255,255,255,${(inten*0.42).toFixed(3)})`);
+      g.addColorStop(1,    'rgba(255,255,255,0)');
+      s.fillStyle = g; s.fillRect(px-r, py-r, r*2, r*2);
+    }
+    s.globalCompositeOperation = 'source-over';
+    const vg = s.createRadialGradient(cv.width/2, cv.height*0.48, Math.min(cv.width,cv.height)*0.32,
+                                      cv.width/2, cv.height*0.48, Math.max(cv.width,cv.height)*0.76);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, `rgba(${G[0]},${G[1]},${G[2]},0.33)`);
+    s.fillStyle = vg; s.fillRect(0, 0, cv.width, cv.height);
+
+    /* ---- the light: bloom off every emitter, plus the sun coming in
+            over your shoulder. Warm lights against cool shade is the
+            whole trick — that pairing is what reads as "graded". ---- */
+    l.globalCompositeOperation = 'lighter';
+    for (let i=0; i<this.lights.length; i++){
+      const [px, py, r, col, inten] = this.lights[i];
+      const rb = r*0.62;
+      const g = l.createRadialGradient(px, py, 1, px, py, rb);
+      g.addColorStop(0, col.replace('%A%', (0.26*inten).toFixed(3)));
+      g.addColorStop(0.45, col.replace('%A%', (0.08*inten).toFixed(3)));
+      g.addColorStop(1, col.replace('%A%', '0'));
+      l.fillStyle = g; l.fillRect(px-rb, py-rb, rb*2, rb*2);
+    }
+    const sg = l.createLinearGradient(cv.width*(0.5 - this.SUN.dx*0.9), -cv.height*0.25,
+                                      cv.width*(0.5 + this.SUN.dx*0.9), cv.height*1.15);
+    const A = G[8]*(1 - (dim||0)*0.7);
+    sg.addColorStop(0,    `rgba(${G[4]},${G[5]},${G[6]},${(A*5.0).toFixed(3)})`);
+    sg.addColorStop(0.5,  `rgba(${G[4]},${G[5]},${G[6]},${(A*1.6).toFixed(3)})`);
+    sg.addColorStop(1, 'rgba(0,0,0,0)');
+    l.fillStyle = sg; l.fillRect(0, 0, cv.width, cv.height);
+
+    s.setTransform(1,0,0,1,0,0); l.setTransform(1,0,0,1,0,0);
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(this.cv, 0, 0, w, h, 0, 0, w*SC, h*SC);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(this.lv, 0, 0, w, h, 0, 0, w*SC, h*SC);
+    ctx.restore();
+    this.reset();
+  }
+};
 let shakeMag = 0, shakeUntil = 0;
 function shake(mag, ms){
   const nowT = Date.now();
@@ -13479,7 +13620,37 @@ function drawMap(){
 
   ctx.textAlign='center'; ctx.textBaseline='middle';
   const S = TILE/46;
-  const shadow = (x,y,w) => { if(!onScreen(x,y))return; ctx.fillStyle='rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(sx(x)+TILE/2, sy(y)+TILE-5, w*S, w*S*0.35, 0, 0, Math.PI*2); ctx.fill(); };
+  /* Contact + cast shadow. `w` doubles as a height proxy — the taller the
+     thing, the longer the shadow it throws away from the sun, and the
+     softer and wider the pool it stands in. This is most of the depth. */
+  const shadow = (x,y,w) => {
+    if(!onScreen(x,y))return;
+    const bx = sx(x)+TILE/2, by = sy(y)+TILE-5, rw = w*S, rh = w*S*0.35;
+    if (!LUM.on || !GFX.high){
+      ctx.fillStyle='rgba(0,0,0,.28)';
+      ctx.beginPath(); ctx.ellipse(bx, by, rw, rh, 0, 0, Math.PI*2); ctx.fill();
+      return;
+    }
+    const L = w*S*1.55;                                  /* how far the shadow reaches */
+    const bl = LUM.blob();
+    const throwIt = (LUM.cast++ < LUM.castMax);          /* a dense wood can't be allowed to stall the frame */
+    ctx.save();
+    if (throwIt){
+    /* the long throw, stamped and squashed along the sun's line */
+    const ex = bx + LUM.SUN.dx*L, ey = by + LUM.SUN.dy*L*0.42;
+    const mx = (bx+ex)/2, my = (by+ey)/2;
+    const half = Math.hypot(ex-bx, ey-by)/2 + rw*0.55;
+    ctx.globalAlpha = 0.24;
+    ctx.save();
+    ctx.translate(mx, my); ctx.rotate(Math.atan2(ey-by, ex-bx));
+    ctx.drawImage(bl, -half, -rh*0.95, half*2, rh*1.9);
+    ctx.restore();
+    }
+    /* the pool it actually stands in — contact shadow, soft-edged */
+    ctx.globalAlpha = 0.44;
+    ctx.drawImage(bl, bx-rw*1.2, by-rw*1.2*0.42, rw*2.4, rw*2.4*0.42);
+    ctx.restore();
+  };
   const draw = (x,y,e,size) => {
     if(!onScreen(x,y))return;
     ctx.save(); ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=5;
@@ -14955,6 +15126,17 @@ function drawMap(){
         }
       }
     }
+    /* the sun catches the top-left of the crown, and the underside falls
+       away — two stamps, and the canopy stops being a flat blob */
+    if (LUM.on && GFX.high){
+      const kx = cx - LUM.SUN.dx*R*0.5 + sway, ky = cyTop - R*0.62;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.30;
+      ctx.drawImage(LUM.lit(), kx-R*0.86, ky-R*0.7, R*1.72, R*1.4);
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 0.26;
+      ctx.drawImage(LUM.blob(), cx + LUM.SUN.dx*R*0.42 + sway - R*0.8, cyTop + R*0.02, R*1.6, R*1.0);
+      ctx.restore();
+    }
   };
   const ORE_TINT = {copper:'#c77b3a', tin:'#c4cbd1', iron:'#a05a44', silver:'#eeeef4', coalr:'#1f1f22', goldr:'#f2c94c', mith:'#5a7fd4', adam:'#4fae62', rune:'#4fd0d4', cobalt:'#2fa3b8', obsidian:'#7a5fd0', starmetal:'#f0f0ff', voidcrystal:'#b07fe8', meteorite:'#ff8c5a'};
   const drawRockShape = (r) => {
@@ -14983,6 +15165,14 @@ function drawMap(){
     if (['goldr','mith','adam','rune','obsidian','starmetal'].includes(r.e.id) && Math.floor(now/600 + h)%3===0){
       ctx.fillStyle = 'rgba(255,255,255,.85)';
       ctx.fillRect(cx + R*0.15, base - R*1.15, 3, 3);
+    }
+    if (LUM.on && GFX.high){                          /* sunward face, shadowed face */
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.24;
+      ctx.drawImage(LUM.lit(), cx - LUM.SUN.dx*R*0.7 - R*0.7, base - R*1.5, R*1.4, R*1.2);
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 0.22;
+      ctx.drawImage(LUM.blob(), cx + LUM.SUN.dx*R*0.65 - R*0.65, base - R*1.0, R*1.3, R*1.0);
+      ctx.restore();
     }
   };
   const drawSpotShape = (s) => {
@@ -17100,6 +17290,42 @@ function drawMap(){
     ctx.fillText('\u2014', cv.width/2, 12);
   }
 
+  /* ---- LUMEN: gather every emitter in view, then light the scene ---- */
+  if (LUM.on && GFX.high && activeId){
+    const flick = 0.86 + 0.14*Math.sin(now/140) + 0.06*Math.sin(now/61);
+    if (OVER){
+      for (const sp of MAP_SPOTS){
+        if (!onScreen(sp.x, sp.y)) continue;
+        const px = sx(sp.x)+TILE/2, py = sy(sp.y)+TILE/2;
+        if (sp.e.id === 'lava')          LUM.add(px, py, TILE*2.3*flick, 'rgba(255,132,40,%A%)', 0.95);
+        else if (sp.e.id === 'sparkle')  LUM.add(px, py, TILE*1.7, 'rgba(190,255,240,%A%)', 0.55);
+      }
+      for (const t of MAP_TREES){
+        const cf = TREE_CONF[t.e.id];
+        if (!cf || !cf.glow || !onScreen(t.x, t.y)) continue;
+        LUM.add(sx(t.x)+TILE/2, sy(t.y)+TILE*0.35, TILE*1.5,
+                t.e.id === 'blossom' ? 'rgba(255,190,220,%A%)' : 'rgba(200,240,225,%A%)', 0.42);
+      }
+      for (const b of MAP_BUILDINGS){                   /* lit windows, spilling into the street */
+        if (!onScreen(b.x, b.y)) continue;
+        const k = b.big ? 1.9 : 1;
+        LUM.add(sx(b.x)+TILE/2, sy(b.y)+TILE*0.62, TILE*1.15*k, 'rgba(255,196,104,%A%)', 0.52);
+      }
+      for (let i=0; i<AMB.length; i++){                 /* the ash country's own firelight */
+        const a = AMB[i];
+        if (a[2] !== 'lava' || !onScreen(a[0], a[1])) continue;
+        LUM.add(sx(a[0])+TILE/2, sy(a[1])+TILE/2, TILE*1.5*flick, 'rgba(255,120,36,%A%)', 0.7);
+      }
+    }
+    /* you carry your own light — brighter with a lantern in the bag */
+    { const lit = (typeof hasLantern === 'function' && hasLantern());
+      const rpL = renderedPos();
+      LUM.add(sx(rpL.x)+TILE/2, sy(rpL.y)+TILE*0.55, TILE*(lit ? 3.4 : 2.2)*(0.97+0.03*Math.sin(now/260)),
+              'rgba(255,214,150,%A%)', lit ? 0.72 : 0.46); }
+    const _preg = OVER ? regionOf(Math.round(P().mapX), Math.round(P().mapY)) : 'dungeon';
+    LUM.render(ctx, cv, _preg, _preg === 'gloom' ? 0.85 : (_preg === 'frost' ? 0.4 : 0));
+  }
+
   /* ---- the hollow's three things, barely — painted OVER the dark, or the
           flat black crushes them and the room has nothing in it at all ---- */
   if (activeId && plane === 'darkhollow'){
@@ -17265,6 +17491,8 @@ function drawMap(){
       const avg = GFX._t2.reduce((a,b)=>a+b,0)/GFX._t2.length;
       if (avg > 20 && ambBudget > 0.25) ambBudget /= 2;
       else if (avg < 17.5 && ambBudget < 1) ambBudget = Math.min(1, ambBudget*2);
+      if (avg > 21 && LUM.castMax > 30) LUM.castMax = Math.max(30, LUM.castMax - 30);
+      else if (avg < 17.5 && LUM.castMax < 140) LUM.castMax = Math.min(140, LUM.castMax + 20);
       GFX._t2 = [];
     } }
   if (GFX.fps){
@@ -18958,15 +19186,7 @@ function forgeCrown(){
     const sup = !!(combat && combat.superior), par = !!(combat && combat.paragon);
     const champ = !!(combat && combat.champion);
     _felled.call(this, fx);
-    if (!mid || champ) return;
-    /* v78.3 — ordinary quarry (Pale Vampire etc.) has no SLAY_BY_ID row, but it
-       is still a valid assignment: count the kill instead of bailing out. */
-    if (!SLAY_BY_ID[mid]){
-      P().slaySup = (P().slaySup||0) + (sup ? 1 : 0);
-      slayKill(mid, sup);
-      renderHeader();
-      return;
-    }
+    if (!mid || champ || !SLAY_BY_ID[mid]) return;
     P().slaySup = (P().slaySup||0) + (sup ? 1 : 0);
     slayDrops(mid, par, sup);
     slayKill(mid, sup);
