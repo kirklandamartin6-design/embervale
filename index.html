@@ -23028,6 +23028,168 @@ renderLocation = function(){
 };
 
 
+/* ============================================================================
+   v77.4 — THE SLAYER ON-RAMP
+
+   "How do I start Slayer now? It says the first slayer master has nothing
+   for me right now."
+
+   He genuinely had nothing. The sixteen Slayer-locked species start at
+   Slayer 5 (Bileslug); you start the skill at Slayer 1; and Slayer xp is
+   only granted while a creature is your assigned task. So the pool at
+   level 1 was EMPTY for every master, and the only way to earn the level
+   that would fill it was a task you could not be given. A closed loop —
+   the skill has been unstartable since v75.
+
+   The fix is the one the design always implied: the lower masters assign
+   ORDINARY monsters as well. You grind common things up to Slayer 5, and
+   the sixteen come online as you climb — which is exactly the ladder the
+   spec describes, and it makes Marrow's "the world above" mean something.
+   ========================================================================== */
+
+/* which everyday monsters each master will put on the board, by territory.
+   Ids are checked against MONSTERS at build time — anything missing is dropped
+   rather than assigned and never found. */
+const SLAY_COMMON_XP = 0.6;
+const SLAY_COMMON = {
+  marrow: ['goblin','wolf','skeleton','bandit','ghoul','ogre','harpy','golem','crow','jack','widow',
+           'broodling','silkspinner','troll','mammoth','vampire','hangman','bride','seaserp','pirate'],
+  ashcaller: ['drake','shade','emberfiend','basilisk','wraith','dragon'],
+  cassiope: ['cometling','seraph','starwyrm','lumen','umbral','zorb','gray','hover','amoeba','stalker'],
+  orin: ['shaftcrawler','stonechewer','dustwidow','deeplight','boreworm','vaulttick'],
+  drowned: ['seashark','kelpbass','seamoray','sheephead','humboldt','blueshark',
+            'viperfish','seaangler','gulpereel','dragonfish','rattail','seaventcrab','hadalsnail'],
+};
+const SLAY_COMMON_OK = {};
+for (const [mid, ids] of Object.entries(SLAY_COMMON))
+  SLAY_COMMON_OK[mid] = ids.filter(id => MONSTERS.some(m => m.id === id) && !SLAY_BY_ID[id]);
+
+/* where an ordinary monster is found, for the master's line of dialogue */
+function slayCommonWhere(mid){
+  const m = MONSTERS.find(x => x.id === mid) || {};
+  if (m.sea) return SEA_BY_ID[m.sea] ? SEA_BY_ID[m.sea].n : 'the Depths';
+  if (m.den) return m.den;
+  for (const [reg, list] of Object.entries(typeof ZONE_MONSTERS !== 'undefined' ? ZONE_MONSTERS : {}))
+    if (list.some(e => e[0] === mid)) return (SLAY_WHERE_TXT[reg] || reg);
+  return 'the world above';
+}
+
+/* a task is now either one of the sixteen, or an ordinary creature.
+   Below Slayer 5 it is always ordinary, because nothing else exists. */
+function slayCommonPool(m){
+  const p = P();
+  return (SLAY_COMMON_OK[m.id] || []).filter(id => !(p.slayBlocks||[]).includes(id));
+}
+function slayTaskName(id){
+  if (SLAY_BY_ID[id]) return SLAY_BY_ID[id].n;
+  const m = MONSTERS.find(x => x.id === id);
+  return m ? m.n : id;
+}
+function slayTaskIcon(id){
+  if (SLAY_BY_ID[id]) return SLAY_BY_ID[id].i;
+  const m = MONSTERS.find(x => x.id === id);
+  return m ? m.i : '\u{1F5E1}️';
+}
+function slayTaskLvl(id){
+  if (SLAY_BY_ID[id]) return SLAY_BY_ID[id].lvl;
+  const m = MONSTERS.find(x => x.id === id);
+  return m ? m.lvl : 30;
+}
+
+const _slayAssign0 = slayAssign;
+slayAssign = function(mid){
+  const p = P(), m = SLAY_MASTERS.find(x => x.id === mid);
+  if (!m || !masterOpen(m)) return;
+  const locked = slayPool(m);
+  const common = slayCommonPool(m);
+  if (!locked.length && !common.length){
+    toast('Nothing on this master’s board suits you yet.');
+    log(`\u{1F5E1}️ <span style="color:#c8a">${m.n} turns the ledger round so you can see it. Every line on this page is above your grade.</span>`);
+    return;
+  }
+  /* the sixteen become likelier as you climb; at Slayer 1 they are impossible */
+  const wantLocked = locked.length && Math.random() < Math.min(0.75, slayLvl() / 60);
+  const id = wantLocked
+    ? locked[Math.floor(Math.random()*locked.length)].id
+    : (common.length ? common[Math.floor(Math.random()*common.length)]
+                     : locked[Math.floor(Math.random()*locked.length)].id);
+  const need = m.cnt[0] + Math.floor(Math.random()*(m.cnt[1]-m.cnt[0]+1));
+  p.slay = {id, need, done:0, master:m.id};
+  const where = SLAY_BY_ID[id] ? slayWhereTxt(SLAY_BY_ID[id]) : slayCommonWhere(id);
+  log(`\u{1F5E1}️ <span class="lvl">${m.n}:</span> “${need} × ${slayTaskName(id)}. They keep to ${where}. Go and be counted.”` +
+      (SLAY_BY_ID[id] ? '' : ' <small style="opacity:.6">(an ordinary quarry — it still pays Slayer xp while it is your task)</small>'));
+  toast(`\u{1F5E1}️ ${need} × ${slayTaskName(id)}`);
+  renderHeader(); renderLocation();
+};
+
+/* the kill hook only understood the sixteen — teach it ordinary quarry */
+const _slayKill0 = slayKill;
+slayKill = function(mid, wasSuperior){
+  const p = P(), t = p.slay;
+  if (t && t.id === mid && !SLAY_BY_ID[mid]){
+    t.done++;
+    /* ordinary quarry pays 60% — the sixteen stay the reason to level the skill */
+    const base = Math.round(slayTaskLvl(mid) * 5 * SLAY_COMMON_XP * (wasSuperior ? 15 : 1) * (1 + statVal('slayxp')/100));
+    grantXp('slayer', base);
+    if (t.done >= t.need) slayCompleteAny();
+    else if (t.done % 5 === 0) log(`\u{1F5E1}️ <span class="lvl">${t.done}/${t.need} × ${slayTaskName(mid)}</span>`);
+    return;
+  }
+  return _slayKill0(mid, wasSuperior);
+};
+/* slayComplete() reads SLAY_BY_ID[t.id] for its payout line — give the
+   ordinary quarry the same settlement without touching the original */
+function slayCompleteAny(){
+  const p = P(), t = p.slay;
+  if (SLAY_BY_ID[t.id]) return slayComplete();
+  const m = SLAY_MASTERS.find(x => x.id === t.master);
+  p.slayStreak = (p.slayStreak||0) + 1; p.slayDone = (p.slayDone||0) + 1;
+  const mult = slayStreakMult(p.slayStreak);
+  const pts = Math.round((m ? m.pts : 15) * mult);
+  p.slayPts = (p.slayPts||0) + pts;
+  const xp = Math.round(slayTaskLvl(t.id) * t.need * 4 * SLAY_COMMON_XP);
+  grantXp('slayer', xp);
+  p.slay = null;
+  log(`\u{1F5E1}️ <span class="lvl">Task complete — ${t.need} × ${slayTaskName(t.id)}.</span> ` +
+      `<span class="good">+${pts} slayer points${mult>1?` (streak ×${mult})`:''}</span> · streak ${p.slayStreak}`);
+  toast(`\u{1F5E1}️ Task complete — +${pts} points`);
+  celebrateLevel();
+  renderHeader(); renderLocation();
+}
+
+/* the substitution helper assumed every task was one of the sixteen */
+const _slaySubstitute0 = slaySubstitute;
+slaySubstitute = function(mon, spawn){
+  const t = P().slay;
+  if (t && !SLAY_BY_ID[t.id]) return mon;      /* ordinary quarry is already out there */
+  return _slaySubstitute0(mon, spawn);
+};
+
+/* the guild panel: say what is on the board, and never show an empty one */
+const _renderSlayer0 = renderSlayer;
+renderSlayer = function(grid){
+  const r = _renderSlayer0(grid);
+  try {
+    const p = P();
+    if (!slayGuildOpen()) return r;
+    if (slayLvl() < 5 && !p.slay){
+      _row(grid, `<span>\u{1F4D8}</span><span class="sn"><b>Starting out</b><br><small>` +
+        `The sixteen Slayer-locked species begin at <b>Slayer 5</b>. Until then Sergeant Marrow assigns ` +
+        `<b>ordinary quarry</b> — goblins, skeletons, ghouls, whatever is walking about — and they pay Slayer xp ` +
+        `at 60% for as long as they are your task. One or two boards will see you past 5, and the sixteen open from there.` +
+        `</small></span>`);
+    }
+    const m0 = SLAY_MASTERS.find(x => x.id === 'marrow');
+    if (m0 && masterOpen(m0)){
+      const lk = slayPool(m0).length, cm = slayCommonPool(m0).length;
+      _row(grid, `<span>\u{1F4CB}</span><span class="sn"><b>Marrow's board</b> — ${lk} of the sixteen · ${cm} ordinary<br>` +
+        `<small>The sixteen become likelier as your Slayer level climbs.</small></span>`);
+    }
+  } catch(e){}
+  return r;
+};
+
+
 updateProfilePreviews();
 </script>
 </body>
