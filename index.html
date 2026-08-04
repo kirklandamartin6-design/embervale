@@ -18958,7 +18958,15 @@ function forgeCrown(){
     const sup = !!(combat && combat.superior), par = !!(combat && combat.paragon);
     const champ = !!(combat && combat.champion);
     _felled.call(this, fx);
-    if (!mid || champ || !SLAY_BY_ID[mid]) return;
+    if (!mid || champ) return;
+    /* v78.3 — ordinary quarry (Pale Vampire etc.) has no SLAY_BY_ID row, but it
+       is still a valid assignment: count the kill instead of bailing out. */
+    if (!SLAY_BY_ID[mid]){
+      P().slaySup = (P().slaySup||0) + (sup ? 1 : 0);
+      slayKill(mid, sup);
+      renderHeader();
+      return;
+    }
     P().slaySup = (P().slaySup||0) + (sup ? 1 : 0);
     slayDrops(mid, par, sup);
     slayKill(mid, sup);
