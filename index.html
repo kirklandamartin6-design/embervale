@@ -671,8 +671,9 @@
 /* ---------- experience table — the realm now caps at level 50 ----------
    The original OSRS curve, untouched, with levels 51–99 simply cut off:
    every level 1–50 costs exactly what it always did. */
-const LEVEL_CAP = 60;   /* raised from 50 with the Starfall Reaches */
-/* levels 1-50 are untouched; 51-60 ramp hard, so the last ten mean something */
+const LEVEL_CAP = 70;   /* 50 -> 60 with the Starfall Reaches; 60 -> 70 with the Depths */
+/* levels 1-50 are untouched; every ten after that ramps harder, so the late game means something.
+   The curve is unchanged — raising the cap simply lets it keep going. */
 const LATE_MULT = lvl => lvl < 50 ? 1 : 1 + (lvl - 49) * 0.55;
 const XP_TABLE = (() => {
   const t = [0, 0]; let pts = 0;
@@ -7679,10 +7680,11 @@ function mileCount(sk){
 }
 function v71Milestone(skill, before, after){
   const ms = MILESTONES[skill]; if (!ms) return;
-  for (const m of [30,45,60]){
+  for (const m of [30,45,60,70]){
     if (before < m && after >= m){
-      log(`🏅 <span class="lvl">${m===60?'MASTERY':'Milestone'} — ${SKILL_NAME(skill)} ${m}.</span> <span class="good">${ms[m]}</span>`);
-      toast(`🏅 ${SKILL_NAME(skill)} ${m===60?'mastered!':'milestone!'}`);
+      const txt = ms[m] || (m === 70 ? 'There is nothing above this. You are the ceiling now.' : '');
+      log(`🏅 <span class="lvl">${m===70?'ASCENDANT':m===60?'MASTERY':'Milestone'} — ${SKILL_NAME(skill)} ${m}.</span> <span class="good">${txt}</span>`);
+      toast(`🏅 ${SKILL_NAME(skill)} ${m===70?'ascendant!':m===60?'mastered!':'milestone!'}`);
       celebrateLevel();
     }
   }
@@ -10172,11 +10174,11 @@ function bookSections(){
   const byLvl = (a,b) => a.l - b.l;
   const secs = [];
   secs.push({id:'woodcutting', n:'🪓 Woodcutting', skill:'woodcutting',
-    rows: TREES.map(t => row(t.lvl, '🌳', t.n, `${t.xp} xp · ${ITEMS[t.item].n}`)).sort(byLvl)});
+    rows: TREES.filter(t => !t.xpOnly).map(t => row(t.lvl, '🌳', t.n, `${t.xp} xp · ${ITEMS[t.item].n}`)).sort(byLvl)});
   secs.push({id:'mining', n:'⛏️ Mining', skill:'mining',
-    rows: ROCKS.map(t => row(t.lvl, ITEMS[t.item].i, t.n, `${t.xp} xp · ${ITEMS[t.item].n}`)).sort(byLvl)});
+    rows: ROCKS.filter(t => !t.xpOnly).map(t => row(t.lvl, ITEMS[t.item].i, t.n, `${t.xp} xp · ${ITEMS[t.item].n}`)).sort(byLvl)});
   secs.push({id:'fishing', n:'🎣 Fishing', skill:'fishing',
-    rows: SPOTS.map(t => row(t.lvl, ITEMS[t.item].i, t.n, `${t.xp} xp · ${ITEMS[t.item].n}`)).sort(byLvl)});
+    rows: SPOTS.filter(t => !t.xpOnly).map(t => row(t.lvl, ITEMS[t.item].i, t.n, `${t.xp} xp · ${ITEMS[t.item].n}`)).sort(byLvl)});
   secs.push({id:'cooking', n:'🍳 Cooking', skill:'cooking',
     rows: COOKS.map(c => row(c.lvl, ITEMS[c.id].i, 'Cook ' + ITEMS[c.id].n,
       `${c.xp} xp · heals ${FOOD[c.id]||'?'} · no burns at ${c.stop}`)).sort(byLvl)});
@@ -13295,6 +13297,18 @@ function drawMap(){
   if (typeof isDepths === 'function' && isDepths()){
     drawDeepScene(ctx, cv, now, sx, sy);
     if (plane === 'station') seaDrawStation(ctx, cv, now, sx, sy, curDun());
+  }
+  else if (!OVER && plane === 'darkhollow'){
+    /* the hollow: no torches, no glow, no detail. Almost nothing. */
+    const dun = curDun();
+    ctx.fillStyle = '#050506';
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    for (let y=Math.max(0,y0-1); y<=Math.min(dun.h-1, y0+VIEWH+1); y++)
+      for (let x=Math.max(0,x0-1); x<=Math.min(dun.w-1, x0+VIEWW+1); x++){
+        const border = (x===0 || y===0 || x===dun.w-1 || y===dun.h-1);
+        ctx.fillStyle = border ? dun.wallc[1] : dun.floor[tileHash(x,y)%5];
+        ctx.fillRect(sx(x), sy(y), TILE+1, TILE+1);
+      }
   }
   else if (!OVER){
     /* dungeon: dark void + torch-lit stone */
@@ -17072,8 +17086,66 @@ function drawMap(){
     }
   }
 
+  /* ---- the hollow: you can see about as far as your own arms ---- */
+  if (activeId && plane === 'darkhollow'){
+    const dpx = (renderedPos().x - camX + 0.5)*TILE, dpy = (renderedPos().y - camY + 0.5)*TILE;
+    const dg = ctx.createRadialGradient(dpx, dpy, TILE*0.3, dpx, dpy, TILE*3.2);
+    dg.addColorStop(0, 'rgba(0,0,0,0)');
+    dg.addColorStop(0.5, 'rgba(0,0,0,.68)');
+    dg.addColorStop(1, 'rgba(0,0,0,.98)');
+    ctx.fillStyle = dg; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.fillStyle = 'rgba(0,0,0,.42)'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.font = 'italic 12px Georgia'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillStyle = 'rgba(150,142,170,.30)';
+    ctx.fillText('\u2014', cv.width/2, 12);
+  }
+
+  /* ---- the hollow's three things, barely — painted OVER the dark, or the
+          flat black crushes them and the room has nothing in it at all ---- */
+  if (activeId && plane === 'darkhollow'){
+    const D9 = curDun();
+    const glowNode = (x, y, col) => {
+      if (!onScreen(x,y)) return;
+      const gx = sx(x)+TILE/2, gy = sy(y)+TILE/2;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      /* barely — you can just make out that something is over there, and
+         nothing more than that until you are standing on it */
+      const br = TILE*2.3, pulse = 0.82 + 0.18*Math.sin(now/2600 + x*1.7 + y);
+      const gg = ctx.createRadialGradient(gx, gy, 1, gx, gy, br*pulse);
+      gg.addColorStop(0, col); gg.addColorStop(0.45, col.replace(/[\d.]+\)$/, '0.10)')); gg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gg; ctx.fillRect(gx-br*1.2, gy-br*1.2, br*2.4, br*2.4);
+      ctx.restore();
+    };
+    for (const [id,x,y] of (D9.trees||[])) glowNode(x, y, 'rgba(84,112,74,0.42)');
+    for (const [id,x,y] of (D9.rocks||[])) glowNode(x, y, 'rgba(104,100,120,0.42)');
+    for (const [id,x,y] of (D9.spots||[])) glowNode(x, y, 'rgba(70,104,124,0.46)');
+  }
+
   /* ---- the Depths: absorption, the lamp, the snow ---- */
   if (activeId && typeof isDepths === 'function' && isDepths()) drawDeepPost(ctx, cv, now);
+
+  /* ---- a flaw in the air, in Hallowmere. Nothing marks it. ---- */
+  if (activeId && OVER && typeof DARK_TEAR !== 'undefined' && onScreen(DARK_TEAR.x, DARK_TEAR.y)){
+    const d9 = Math.abs(P().mapX - DARK_TEAR.x) + Math.abs(P().mapY - DARK_TEAR.y);
+    if (d9 <= 6){
+      const a9 = Math.max(0, (7 - d9) / 7) * (typeof darkFound === 'function' && darkFound() ? 0.85 : 0.5);
+      const tx = sx(DARK_TEAR.x)+TILE/2, ty = sy(DARK_TEAR.y)+TILE/2;
+      ctx.save();
+      ctx.globalAlpha = a9;
+      const tg = ctx.createRadialGradient(tx, ty, 1, tx, ty, TILE*0.42);
+      tg.addColorStop(0, 'rgba(0,0,0,.92)'); tg.addColorStop(0.72, 'rgba(14,10,20,.55)'); tg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = tg;
+      ctx.beginPath();
+      ctx.ellipse(tx, ty, TILE*0.16 + Math.sin(now/1400)*TILE*0.012, TILE*0.40, 0.12, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(140,120,180,${(0.30*a9).toFixed(2)})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(tx, ty, TILE*0.16, TILE*0.40, 0.12, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
 
   /* ---- weather of the soul: Hallowmere's dark, the Maze's cold ---- */
   if (OVER && activeId && GFX.high){
@@ -23291,6 +23363,140 @@ SPOTS.push({id:'shellbed',  n:'Shell bed',   lvl:8,  xp:30, item:'nacre',      t
   APPARATUS[3].d = 'Rune bar, tideglass and abyssal glass — glass that was made under pressure and therefore does ' +
                    'not mind it. The seams are in the Midnight Zone; the pearl is in something that lives deeper.';
 })();
+
+
+/* ============================================================================
+   v78 — THE CAP AT SEVENTY, AND THE PLACE WITH NO NAME ON IT
+
+   LEVEL_CAP moves 60 → 70 in place (it is a const consumed by XP_TABLE two
+   lines later, so it cannot be overridden from here — see the build patch).
+   The existing LATE_MULT ramp continues unchanged, which keeps 1–50 exactly
+   as it was, 51–60 exactly as it was, and makes 61–70 the same shape of climb
+   that 51–60 already is: 871k xp at 60 becomes 5.49M at 70.
+
+   And below Hallowmere there is a tear in the air that nothing marks.
+   ========================================================================== */
+
+/* ---------- the three dark nodes ----------
+   They pay experience and nothing else. No item, no drop, no rare, no cache.
+   That is the whole of them, on purpose. */
+const DARK_NODES = [
+  {id:'dark_bough', n:'Dark Bough', list:TREES, skill:'woodcutting', lvl:62, xp:900, time:5.6},
+  {id:'dark_seam',  n:'Dark Seam',  list:ROCKS, skill:'mining',      lvl:62, xp:900, time:5.6},
+  {id:'dark_pool',  n:'Dark Pool',  list:SPOTS, skill:'fishing',     lvl:62, xp:900, time:5.6},
+];
+for (const d of DARK_NODES)
+  d.list.push({id:d.id, n:d.n, lvl:d.lvl, xp:d.xp, item:null, time:d.time, dark:true, xpOnly:true});
+
+/* gathering them grants xp and stops there — resolveAction assumes an item,
+   so the dark nodes are settled before it ever runs */
+const _resolveAction0 = resolveAction;
+resolveAction = function(){
+  const a = action;
+  if (a && a.entry && a.entry.xpOnly){
+    const skill = a.loc.skill, lvl = levelFor(P().xp[skill]);
+    if (Math.random() < successChance(lvl, a.entry.lvl)){
+      grantXp(skill, a.entry.xp);
+      spawnDrop(`+${a.entry.xp} xp`); hitTarget();
+      log(`<span style="color:#9a90b8">${a.entry.n} — it comes away in your hands and there is nothing in them.</span> <span class="good">(+${a.entry.xp} ${skill} xp)</span>`);
+    }
+    return;
+  }
+  return _resolveAction0();
+};
+
+/* The three of them are deliberately absent from every list that names what a
+   node yields, because they do not yield anything. The gather panels, the
+   Book's skill pages and the Slayer material tables all read ITEMS[e.item] —
+   which is exactly the shape of the gloomcarp bug, so they are filtered at the
+   source rather than guarded one call site at a time. */
+const _recipeGuildLocked0 = recipeGuildLocked;
+recipeGuildLocked = function(e){
+  if (e && e.xpOnly) return true;                 /* never listed on a bench or a shore */
+  return _recipeGuildLocked0(e);
+};
+const _bookRowsFilter = (function(){
+  for (const list of [TREES, ROCKS, SPOTS]){
+    const real = list.filter(e => !e.xpOnly);
+    Object.defineProperty(list, 'visible', {value: real, enumerable:false, configurable:true});
+  }
+})();
+
+/* ---------- the plane ---------- */
+DUNGEONS.darkhollow = (function(){
+  const W = 15, H = 11;
+  const rows = [];
+  for (let y=0;y<H;y++){
+    const r = new Array(W);
+    for (let x=0;x<W;x++) r[x] = (x===0||y===0||x===W-1||y===H-1) ? '#' : '.';
+    rows.push(r);
+  }
+  return {
+    n:' ', w:W, h:H, entry:[7,9], tier:6, dark:true,
+    floor:['#0a0a0c','#090909','#0b0b0d','#080808','#0a0a0b'],
+    wallc:['#141416','#040404'],
+    mask: rows.map(r=>r.join('')),
+    pillars:[], rocks:[['dark_seam',3,3]], monsters:[], chests:[],
+    trees:[['dark_bough',7,2]], spots:[['dark_pool',11,3]],
+    torches:[],
+    enterMsg:'\u{1F311} <span style="color:#b0a8c8">You step through and the sound goes first. There is a floor, because you are standing on it. Somewhere off to the left something is very faintly the colour of wood, and to the right something is very faintly the colour of water, and neither of them is near enough to see properly.</span>',
+  };
+})();
+
+/* ---------- the tear, in Hallowmere, and nothing marks it ---------- */
+const DARK_TEAR = {x:34, y:75};
+function darkFound(){ return !!(P().met && P().met.darkhollow); }
+
+/* it is drawn as almost nothing — a flaw in the air you only catch up close */
+const _drawMapDark = null;   /* the painter is patched into drawMap by the build */
+
+/* walking onto it takes you through */
+const _mapClickDark = mapClick;
+mapClick = function(ev){
+  if (plane === 'over'){
+    const cv = document.getElementById('map'), r = cv.getBoundingClientRect();
+    const x = Math.floor(((ev.clientX-r.left)/r.width*cv.width)/TILE + camX);
+    const y = Math.floor(((ev.clientY-r.top)/r.height*cv.height)/TILE + camY);
+    if (x === DARK_TEAR.x && y === DARK_TEAR.y)
+      return walkTo(x, y, {kind:'darktear', x, y});
+  }
+  return _mapClickDark(ev);
+};
+const _runInteractDark = runInteract;
+runInteract = function(){
+  const it = pendingInteract;
+  if (it && it.kind === 'darktear'){
+    pendingInteract = null;
+    const p = P();
+    p.met = p.met || {};
+    if (!p.met.darkhollow){
+      p.met.darkhollow = true;
+      log('\u{1F311} <span class="lvl">There is a flaw in the air here.</span> Not a door. Not a gate. A place where the wood has been folded over on itself and not folded back, and it has clearly been like this for a very long time, and nobody has written it down.');
+      celebrateLevel();
+    }
+    startTransition(); stopAction();
+    p.surfX = p.mapX; p.surfY = p.mapY;
+    p.plane = 'darkhollow'; plane = 'darkhollow';
+    const D = DUNGEONS.darkhollow;
+    p.mapX = D.entry[0]; p.mapY = D.entry[1];
+    worldPath = []; pendingInteract = null; moveAnim = null; nextStepAt = 0; petRendPos = null; petTrail = null;
+    dungeonOpened = new Set(); dunSlain = new Set();
+    snapCam();
+    log(D.enterMsg);
+    toast('\u{1F311}');
+    return;
+  }
+  return _runInteractDark();
+};
+/* you walk onto the tear rather than through it, so it must not block */
+const _blockedAtDark = blockedAt;
+blockedAt = function(x, y){
+  if (plane === 'over' && x === DARK_TEAR.x && y === DARK_TEAR.y) return false;
+  return _blockedAtDark(x, y);
+};
+
+/* the hollow is unlit: no torches, no glow, and the ambient pass leaves it be */
+function isDarkHollow(){ return plane === 'darkhollow'; }
 
 
 updateProfilePreviews();
