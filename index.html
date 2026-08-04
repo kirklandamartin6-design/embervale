@@ -24311,6 +24311,95 @@ if (typeof astralQuestMarkers === 'function' && typeof DEEP_SHAFT !== 'undefined
   };
 }
 
+/* ============================================================================
+   v80.3 — ORDINARY QUARRY COUNTS AGAIN (the v78.3 fix, reverted a SECOND time)
+   Reported by k: "emberfiends aren't giving slayer exp." Ember Fiend is on the
+   Ashcaller's ordinary board (SLAY_COMMON.ashcaller), not one of the sixteen.
+   The v75 felled wrapper still opened with
+       if (!mid || champ || !SLAY_BY_ID[mid]) return;
+   and so bailed before slayKill for every ordinary quarry — the exact bug
+   v78.3 fixed and v79 reverted. It was reverted AGAIN by v80.1, because the
+   canonical project doc never received the v79.1 restoration and v80.1 was
+   built from that doc. Third time this one line has shipped broken.
+   Fixed here as an OUTER wrapper rather than an edit to the v75 block, so it
+   survives the next rebuild from the doc no matter which way the drift goes.
+   ========================================================================== */
+(function ordinaryQuarryCounts(){
+  if (typeof monsterFelled !== 'function' || typeof slayKill !== 'function') return;
+  const _felledOrd = monsterFelled;
+  monsterFelled = function(fx){
+    /* capture BEFORE calling through — the original clears combat on several paths */
+    const mid   = combat ? combat.mid : null;
+    const sup   = !!(combat && combat.superior);
+    const champ = !!(combat && combat.champion);
+    const rift  = !!(combat && combat.rift);
+    const t     = P().slay;
+    const ordinaryTask = !!(mid && !champ && !rift && !SLAY_BY_ID[mid] && t && t.id === mid);
+    const r = _felledOrd.call(this, fx);
+    if (ordinaryTask){
+      P().slaySup = (P().slaySup||0) + (sup ? 1 : 0);
+      slayKill(mid, sup);          /* the v77.4 wrapper pays 60% and settles the task */
+      renderHeader();
+    }
+    return r;
+  };
+})();
+
+/* ============================================================================
+   v80.4 — THE HOLE IN THE SKY WAS UNFINISHABLE
+   Reported by k: "idk what to do after i click walk 4 times. theres nothing
+   else to click."  Correct, and it is a hard deadlock of exactly the v77.5
+   kind — a requirement whose only source sits behind the requirement itself.
+
+     stage 4 of 4 : "Bring back a piece of the wall"   ok: p.deepBest >= 1
+     deepOpen()   : deepQuestStage() >= 4
+     the Descend buttons in renderDeepShaft are drawn ONLY when deepOpen()
+
+   So the last stage wants you to have been down, and going down wants the
+   last stage finished. renderDeepShaft has an `else if (st === 0)` and an
+   `else if (st === 2)` and nothing at all for st === 3, so the panel renders
+   stage 4/4 with no button on it. The Descent has been unreachable since v76
+   and nobody had walked the quest end-to-end to find out.
+
+   Two repairs, both wrappers:
+   1. at stage 3, Orin lends you the rope for one floor — the descent IS the
+      task, which is what the design doc always described
+   2. `deepBest` only ever moved inside deepNextFloor, so arriving on floor 1
+      left it at 0 and the report button still would not appear
+   ========================================================================== */
+(function descentFirstDescent(){
+  if (typeof renderDeepShaft !== 'function') return;
+  const _rds = renderDeepShaft;
+  renderDeepShaft = function(grid){
+    const r = _rds.call(this, grid);
+    try {
+      if (typeof deepOpen === 'function' && !deepOpen() && deepQuestStage() === 3){
+        const d = document.createElement('div');
+        d.className = 'locDesc'; d.style.gridColumn = '1/-1';
+        d.innerHTML = '<small>Orin uncoils her second rope without being asked. “One floor. Chip the wall, come back up. ' +
+                      'If you go further than that it is your business, but I will not be writing it down.”</small>';
+        grid.appendChild(d);
+        const b = document.createElement('button');
+        b.className = 'btn'; b.style.gridColumn = '1/-1';
+        b.textContent = '⛏️ Climb down and chip a piece off the wall';
+        b.onclick = () => { if (typeof closeOverlay === 'function') closeOverlay(); deepStart(1); };
+        grid.appendChild(b);
+      }
+    } catch(e){}
+    return r;
+  };
+})();
+(function deepBestOnStart(){
+  if (typeof deepStart !== 'function') return;
+  const _ds = deepStart;
+  deepStart = function(fromFloor){
+    const r = _ds.call(this, fromFloor);
+    const p = P();
+    if ((p.deepFloor||0) > (p.deepBest||0)) p.deepBest = p.deepFloor;
+    return r;
+  };
+})();
+
 updateProfilePreviews();
 </script>
 </body>
