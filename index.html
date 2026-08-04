@@ -23190,6 +23190,109 @@ renderSlayer = function(grid){
 };
 
 
+/* ============================================================================
+   v77.5 — THE APPARATUS BOOTSTRAP
+
+   "How do you start the depths? considering i cant dive to get kelp."
+
+   Correct, and my bug. The tier-1 hood wanted kelp fibre and nacre, and both
+   only existed inside the Sunlit Shallows — which needs the tier-1 hood. The
+   entire zone was unreachable. Two more of the same shape were behind it:
+
+     t1  kelp_fibre, nacre     only in sea1 (t1)   — hard deadlock
+     t3  vent_sulfur           only in sea3 (t3)   — hard deadlock
+     t4  abyssal_glass         only in sea4 (t4)   — mineable nowhere reachable
+                                                     (a Kraken drop was the sole route)
+
+   The rule the spec always stated is "each tier is made largely out of the
+   zone above it". So every tier's inputs must be obtainable one tier DOWN,
+   and tier 1's must be obtainable with no apparatus at all. qreg now proves
+   that for the whole ladder.
+   ========================================================================== */
+
+/* 1 · the dock itself is fishable — you can reach the fringe without a hood.
+       Low-level on purpose: this is the on-ramp, not the efficient source. */
+TREES.push({id:'shorekelp', n:'Wrack kelp',  lvl:8,  xp:34, item:'kelp_fibre', time:2.8, sea:true, shore:true});
+SPOTS.push({id:'shellbed',  n:'Shell bed',   lvl:8,  xp:30, item:'nacre',      time:2.8, sea:true, shore:true});
+
+(function stockTheDock(){
+  const D = DUNGEONS.station; if (!D) return;
+  const taken = new Set();
+  for (const n of (D.snpcs||[])) taken.add(n.x+','+n.y);
+  for (const p of (D.pillars||[])) taken.add(p[0]+','+p[1]);
+  if (D.dive) taken.add(D.dive.x+','+D.dive.y);
+  taken.add(D.entry[0]+','+D.entry[1]);
+  for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) taken.add((D.entry[0]+dx)+','+(D.entry[1]+dy));
+  const open = (x,y) => (D.mask[y]||'')[x] === '.' && !taken.has(x+','+y);
+  /* the same free-tile picker the sea planes use: reserve before the next pick,
+     and never leave a node with fewer than two open neighbours — packing them
+     against the dock wall walled each other in, which is how this was caught. */
+  const R = seaRng(0x0D0C4);
+  const cells = [];
+  for (let y = 1; y < D.h-1; y++) for (let x = 1; x < 15; x++) cells.push([x,y]);
+  for (let i = cells.length-1; i > 0; i--){ const j = Math.floor(R()*(i+1)); const t = cells[i]; cells[i] = cells[j]; cells[j] = t; }
+  const pick = () => {
+    for (const [x,y] of cells){
+      if (!open(x,y)) continue;
+      let n = 0;
+      for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) if (open(x+dx, y+dy)) n++;
+      if (n < 2) continue;
+      taken.add(x+','+y);
+      return [x,y];
+    }
+    return null;
+  };
+  const put = (arr, id, n) => { for (let i=0;i<n;i++){ const c = pick(); if (c) arr.push([id, c[0], c[1]]); } };
+  put(D.trees, 'shorekelp', 5);
+  put(D.spots, 'shellbed',  5);
+  D._blocks = null; D._trees = null; D._spots = null;      /* the caches were built empty */
+})();
+
+/* 2 · vents at the Twilight, and abyssal glass at the Midnight — so tier 3
+       and tier 4 are each made out of the zone you can already reach */
+(function openTheLadder(){
+  const add = (planeId, rockId, n) => {
+    const D = DUNGEONS[planeId]; if (!D) return;
+    const taken = new Set();
+    for (const a of D.pillars) taken.add(a[0]+','+a[1]);
+    for (const a of D.rocks)   taken.add(a[1]+','+a[2]);
+    for (const a of D.trees)   taken.add(a[1]+','+a[2]);
+    for (const a of D.spots)   taken.add(a[1]+','+a[2]);
+    for (const a of D.monsters)taken.add(a[1]+','+a[2]);
+    for (const a of D.chests)  taken.add(a[0]+','+a[1]);
+    for (const a of (D.pockets||[])) taken.add(a[0]+','+a[1]);
+    taken.add(D.entry[0]+','+D.entry[1]);
+    const R = seaRng(0xBEEF ^ planeId.charCodeAt(3));
+    let placed = 0;
+    for (let t = 0; t < 4000 && placed < n; t++){
+      const x = 1 + Math.floor(R()*(D.w-2)), y = 1 + Math.floor(R()*(D.h-2));
+      if ((D.mask[y]||'')[x] !== '.' || taken.has(x+','+y)) continue;
+      /* never seal a tile in — leave it at least two open neighbours */
+      let open = 0;
+      for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]])
+        if ((D.mask[y+dy]||'')[x+dx] === '.' && !taken.has((x+dx)+','+(y+dy))) open++;
+      if (open < 2) continue;
+      taken.add(x+','+y); D.rocks.push([rockId, x, y]); placed++;
+    }
+    D._blocks = null; D._rocks = null;
+  };
+  add('sea2', 'sulfvent',  5);      /* tier 3 is built out of the Twilight */
+  add('sea3', 'abyssvein', 5);      /* tier 4 is built out of the Midnight */
+})();
+
+/* 3 · say so, in the two places a player will actually look */
+(function tellThem(){
+  const a1 = APPARATUS[0];
+  a1.d = 'Hammered steel, a bladder of oiled kelp, and a window of ground shell. ' +
+         'Everything it is made of washes up on the station dock — cut the wrack kelp and pick the shell beds ' +
+         'on the west side, no apparatus needed. Good to about twenty metres, which is exactly as far as the kelp goes.';
+  APPARATUS[2].d = 'A shell rather than a suit — adamant ribs over whalebone, because whale bone is the only bone ' +
+                   'that has already solved this problem. The sulfur comes off the vents in the Twilight.';
+  APPARATUS[3].d = 'Rune bar, tideglass and abyssal glass — glass that was made under pressure and therefore does ' +
+                   'not mind it. The seams are in the Midnight Zone; the pearl is in something that lives deeper.';
+})();
+
+
 updateProfilePreviews();
 </script>
 </body>
