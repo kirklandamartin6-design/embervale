@@ -21350,15 +21350,41 @@ function seaAirHud(ctx, cv, now, z){
    damped 40%, cold and shadow amplified 20%.
    ========================================================================== */
 const SEA_ELEMENT = {fire:0.6, lightning:0.6, cold:1.2, shadow:1.2};
+/* Which element a build actually fights with.
+   NOTE: the player's class lives on p.class, not p.cls. Reading the wrong
+   field made this return null for everybody, so the whole damping rule was
+   dead on arrival in v77 — and qreg validated it because the test set p.cls
+   too. The deep Depths audit caught it by driving the real field. */
+const SEA_CLASS_ELEMENT = {
+  mage:        {fire:'fire', frost:'cold', _default:'fire'},
+  warlock:     {_default:'shadow'},
+  princess:    {solar:'fire', lunar:'cold', _default:'fire'},
+  rogue:       {subtlety:'shadow', _default:'shadow'},
+  stormsinger: {_default:'lightning'},
+  riftwalker:  {_default:'shadow'},
+  hunter:      {_default:null},
+  paladin:     {_default:null},
+  runewarden:  {_default:null},
+};
+function seaBranchIds(){
+  /* p.talents is {0:{...},1:{...}} keyed by branch index — resolve the index
+     back to the branch id the class declares, and report the one with points */
+  const p = P(), c = CLASSES[p.class];
+  if (!c || !c.branches) return [];
+  const t = p.talents || {};
+  const out = [];
+  for (let i=0;i<c.branches.length;i++){
+    const pts = Object.values(t[i] || {}).reduce((a,b)=>a+(+b||0), 0);
+    if (pts > 0) out.push({id:c.branches[i].id, pts});
+  }
+  return out.sort((a,b) => b.pts - a.pts);
+}
 function seaElementOf(){
-  const cls = (P().cls||'').toLowerCase();
-  const br  = JSON.stringify(P().talents||{});
-  if (/mage|princess/.test(cls) && /frost|lunar/.test(br)) return 'cold';
-  if (/mage/.test(cls)) return 'fire';
-  if (/stormsinger|shaman/.test(cls)) return 'lightning';
-  if (/warlock|rogue|assassin|shadow/.test(cls)) return 'shadow';
-  if (/knight|warrior|hunter|runewarden|princess/.test(cls)) return null;
-  return null;
+  const cls = P().class;
+  const map = SEA_CLASS_ELEMENT[cls];
+  if (!map) return null;
+  for (const b of seaBranchIds()) if (map[b.id] !== undefined) return map[b.id];
+  return map._default === undefined ? null : map._default;
 }
 function seaDamageMult(){
   if (!isSea()) return 1;
@@ -21410,7 +21436,9 @@ EQUIP.reefreader_lenses = {slot:'helm', pow:22, cls:'any', req:38, reqSkill:'fis
 let seaObs = null;
 function seaFaunaAt(x, y){
   const D = curDun(); if (!D || !D.fauna) return null;
-  let best = null, bd = 2.4;
+  /* 0.9 not 2.4 — a fauna answers for the tile it is standing on, and no
+     further. At 2.4 it shadowed every rock and chest within two tiles. */
+  let best = null, bd = 0.9;
   for (const f of D.fauna){
     const d = Math.hypot(f.x-x, f.y-y);
     if (d < bd){ bd = d; best = f; }
@@ -22010,7 +22038,23 @@ renderLocation = function(){
   return _renderLocation0();
 };
 
-/* clicks inside the Depths */
+/* clicks inside the Depths.
+   ORDER MATTERS. seaFaunaAt() matches anything within 2.4 tiles, and a sea
+   plane carries ~64 fauna — so offering "observe" before the real entities
+   swallowed clicks on rocks and chests almost everywhere. Real entities are
+   resolved first by delegating to the base handler, and a fauna only answers
+   for a click that actually lands on it. */
+function seaEntityAt(D, x, y){
+  if (!D) return false;
+  if (D.mask && (D.mask[y]||'')[x] === '#') return true;
+  for (const a of (D.rocks||[]))    if (a[1]===x && a[2]===y) return true;
+  for (const a of (D.trees||[]))    if (a[1]===x && a[2]===y) return true;
+  for (const a of (D.spots||[]))    if (a[1]===x && a[2]===y) return true;
+  for (const a of (D.monsters||[])) if (a[1]===x && a[2]===y) return true;
+  for (const a of (D.chests||[]))   if (a[0]===x && a[1]===y) return true;
+  for (const a of (D.pillars||[]))  if (a[0]===x && a[1]===y) return true;
+  return false;
+}
 const _mapClick0 = mapClick;
 mapClick = function(ev){
   if (!isDepths()) return _mapClick0(ev);
@@ -22023,15 +22067,16 @@ mapClick = function(ev){
   if (D && D.snpcs) for (const n of D.snpcs)
     if (n.x===x && n.y===y) return walkTo(x,y,{kind:'seanpc', n, x, y});
   if (D && D.dive && D.dive.x===x && D.dive.y===y) return walkTo(x,y,{kind:'building', loc:'sea_dive', x, y});
+  /* anything the base engine owns — ore, kelp, fishing spots, chests,
+     monsters, walls — is its click, not ours */
+  if (seaEntityAt(D, x, y)) return _mapClick0(ev);
   if (isSea()){
-    const f = seaFaunaAt(x, y);
-    if (f) return walkTo(Math.round(f.x), Math.round(f.y), {kind:'seaobserve', f, x, y});
     if (D && D.reef) for (let i=0;i<D.reef.length;i++)
       if (D.reef[i][0]===x && D.reef[i][1]===y) return walkTo(x,y,{kind:'seareef', k:'sea1.'+i, x, y});
     if (D && D.whaleFall && Math.abs(D.whaleFall.x-x)<=2 && Math.abs(D.whaleFall.y-y)<=1)
       return walkTo(x, D.whaleFall.y+1, {kind:'seawhale', x, y});
-    if (D && D.pockets) for (const [ax,ay] of D.pockets)
-      if (ax===x && ay===y) return walkTo(x,y,null);
+    const f = seaFaunaAt(x, y);
+    if (f) return walkTo(Math.round(f.x), Math.round(f.y), {kind:'seaobserve', f, x, y});
   }
   return _mapClick0(ev);
 };
@@ -22076,7 +22121,8 @@ function seaWhaleUse(){
     p.whaleAt = Date.now(); p.whaleStages = {0:true};
     log('\u{1F40B} <span class="lvl">You log the fall.</span> It landed recently — the hagfish and the sleeper sharks are still on it, and there is very little of it that is not moving.');
     seaWhaleCard(0);
-    return;
+    /* and it pays on the first visit too — logging it and coming away with
+       nothing read as a dead click */
   }
   const st = whaleStage();
   p.whaleStages = p.whaleStages || {};
