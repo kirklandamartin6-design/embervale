@@ -14902,6 +14902,13 @@ function drawMap(){
     lightlesschoir:{k:'anglerm', c1:'#050508', c2:'#a0f0c0', sz:2.0},
     ventmother:{k:'crabk', c1:'#2a1a14', c2:'#ff8040', sz:2.4},
     hadalthing:{k:'sleeperm', c1:'#08080c', c2:'#7050b0', sz:3.0},
+    /* v80.9 — the four hall bosses of the Descent (MON_LOOK is built inside a
+       lazily-run closure, so a post-load window.MON_LOOK[id] assignment never
+       lands — the v75 code hit this too and worked around it with SLAY_LOOK) */
+    thechewer:{k:'blob', c1:'#3e3830', c2:'#9a8a68', sz:2.10},
+    choirroots:{k:'serpent', c1:'#2c2018', c2:'#8a6a48', sz:1.95},
+    grandmother:{k:'golem', c1:'#4a4650', c2:'#a09aa8', crown:1, sz:2.60},
+    shaftthing:{k:'sleeperm', c1:'#07070b', c2:'#6a4a9a', sz:3.00},
     /* v76.2 — the shaft's own */
     shaftcrawler:{k:'quad', c1:'#2a2028', c2:'#6a5a68', ears:'pointy', tail:'thin', sz:1.05},
     stonechewer:{k:'blob', c1:'#4a4238', c2:'#8a7e68', sz:1.25},
@@ -24614,6 +24621,132 @@ if (typeof astralQuestMarkers === 'function' && typeof DEEP_SHAFT !== 'undefined
     dun._blocks = s; dun._blkSlain = dunSlain.size;
     return s;
   };
+})();
+
+/* ============================================================================
+   v80.9 — THE FOUR HALL BOSSES GET TO BE THEMSELVES
+   Reported by k: "what happened to the cool descent bosses"
+
+   They were never built. v76.1 gave the four halls real MECHANICS —
+   deepBossRound() implements the Chewer's burrow, the Choir's revive,
+   Grandmother's beat and the Shaft Thing's enrage, and all four fire
+   correctly — but nobody ever gave them BODIES. deepBuildFloor's boss branch
+   reads:
+
+       monsters.push([pool[floor % pool.length], 28, 13, lvl + 6]);
+
+   …so the boss of a hall is whichever ordinary Delve species that modulo
+   lands on, at +6 levels and with no `boss` flag at all. Observed on seed 999:
+
+       floor  5 "The Chewer" ................ an Ember Fiend, 354 hp
+       floor 10 "The Choir of Roots" ........ a Shaft Crawler, 309 hp
+       floor 15 "Grandmother Stone" ......... The First Dug,   329 hp
+       floor 20 "What the Shaft Was Dug For"  a Fire Drake,    292 hp
+
+   Trash health, trash names, no boss bar, no boss buff, and the fall text
+   the base engine keeps for bosses never fired because `mon.boss` was unset.
+   The mechanics were real; you just could not tell, because the thing running
+   them was called Fire Drake and died in four hits.
+
+   Four proper monsters here, with models, and the hall branch now asks for
+   them by name. They are the only things in the game above the level cap,
+   which is what the design doc said they should be.
+   ========================================================================== */
+const DEEP_HALLS = [
+  /* floor, id, name, icon, lvl, MON_LOOK */
+  [5,  'thechewer',   'The Chewer',                   '\u{1FAA8}', 55,
+       {k:'blob',     c1:'#3e3830', c2:'#9a8a68', sz:2.10}],
+  [10, 'choirroots',  'The Choir of Roots',           '\u{1F3B5}', 60,
+       {k:'serpent',  c1:'#2c2018', c2:'#8a6a48', sz:1.95}],
+  [15, 'grandmother', 'Grandmother Stone',            '\u{1F5FF}', 65,
+       {k:'golem',    c1:'#4a4650', c2:'#a09aa8', crown:1, sz:2.60}],
+  [20, 'shaftthing',  'What the Shaft Was Dug For',   '\u{1F573}️', 70,
+       {k:'sleeperm', c1:'#07070b', c2:'#6a4a9a', sz:3.00}],
+];
+(function buildTheHalls(){
+  const MOTE = (typeof DEEP_MOTE !== 'undefined') ? DEEP_MOTE : 'cinder_mote';
+  for (const [floor, id, n, i, lvl, look] of DEEP_HALLS){
+    if (!MONSTERS.some(m => m.id === id)){
+      MONSTERS.push({id, n, i, lvl, tier:6, boss:true,
+        hp:Math.round(lvl*26), atk:Math.round(lvl*2.6), def:Math.round(lvl*2.4),
+        mh:Math.round(lvl*0.72), gold:[lvl*140, lvl*260],
+        loot:[[MOTE,1],['uncut_diamond',.5],['void_shard',.35],['meteor_ore',.3]]});
+    }
+    if (window.MON_LOOK && !window.MON_LOOK[id]) window.MON_LOOK[id] = look;
+    /* a hall boss is never ordinary trash */
+    if (typeof DEEP_POOL !== 'undefined'){
+      const k = DEEP_POOL.indexOf(id);
+      if (k >= 0) DEEP_POOL.splice(k, 1);
+    }
+  }
+  /* and the fall text the base engine looks up for a boss */
+  if (typeof FALL !== 'undefined'){
+    FALL.thechewer   = '\u{1FAA8} The Chewer stops chewing. The floor, for the first time, is only a floor.';
+    FALL.choirroots  = '\u{1F3B5} All three go quiet in the same breath, which is the only way they were ever going to.';
+    FALL.grandmother = '\u{1F5FF} Grandmother Stone sits back down, and does not get up, and the beat goes out of the room.';
+    FALL.shaftthing  = '\u{1F573}️ It stops. Whatever the shaft was dug for, it was dug for this, and now it is done.';
+  }
+  /* the hall branch asks for its own boss instead of pool[floor % pool.length] */
+  if (typeof deepBuildFloor === 'function'){
+    const _dbf = deepBuildFloor;
+    const byFloor = {};
+    for (const [floor, id, , , lvl] of DEEP_HALLS) byFloor[floor] = {id, lvl};
+    deepBuildFloor = function(floor){
+      const dun = _dbf.call(this, floor);
+      const want = byFloor[floor];
+      if (dun && want && dun.monsters && dun.monsters.length){
+        dun.monsters[0][0] = want.id;
+        dun.monsters[0][3] = want.lvl;
+        delete dun._mons;
+      }
+      return dun;
+    };
+  }
+})();
+
+/* ============================================================================
+   v80.10 — VAULT TICK AND GRAVEBORE DID NOT EXIST ANYWHERE
+   Reported by k: "why arent vault ticks showing up in the descent"
+
+   Because slayHere() has a hard-coded list of planes:
+
+       if (s.where === 'ashlands' || s.where === 'astral' || s.where === 'fathom')
+         return plane === s.where;
+       return plane === 'over' && regionOf(P().mapX, P().mapY) === s.where;
+
+   Vault Tick and Gravebore are the only two of the sixteen with
+   where:'deep'. 'deep' is not in that list, so they fall through to the
+   overworld branch and need `plane === 'over'` AND a region called 'deep',
+   which does not exist. slayHere() is therefore **false everywhere in the
+   game**, and slaySubstitute can never seat them.
+
+   And they were never added to DEEP_POOL either, so they do not spawn in the
+   shaft on their own. Between the two, both species have been unobtainable
+   since v75 — which also means Orin's board can hand you a task you cannot
+   possibly complete, and that **Tick's Purse and the Borer's Spur are
+   unreachable**. The Spur is one of the five things that lets you strike the
+   Delve's back rank, so a whole tactical option was sealed behind it.
+
+   Two repairs:
+     1. slayHere() learns every non-overworld plane instead of three of them.
+     2. both species join DEEP_POOL, which is what v76.2 said it had done.
+   ========================================================================== */
+(function theShaftsOwnQuarry(){
+  /* 1 — a plane is a plane, not a hard-coded list of three */
+  if (typeof slayHere === 'function' && typeof regionOf === 'function'){
+    const PLANE_WHERE = new Set(['ashlands','astral','fathom','deep']);
+    window.slayHere = slayHere = function(s){
+      if (!s) return false;
+      if (PLANE_WHERE.has(s.where)) return plane === s.where;
+      if (typeof DUNGEONS !== 'undefined' && DUNGEONS[s.where]) return plane === s.where;
+      return plane === 'over' && regionOf(P().mapX, P().mapY) === s.where;
+    };
+  }
+  /* 2 — and they live down there, so put them in the roster */
+  if (typeof DEEP_POOL !== 'undefined'){
+    for (const id of ['vaulttick','gravebore'])
+      if (MONSTERS.some(m => m.id === id) && !DEEP_POOL.includes(id)) DEEP_POOL.push(id);
+  }
 })();
 
 updateProfilePreviews();
