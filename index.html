@@ -17021,6 +17021,39 @@ function drawMap(){
           ctx.fillStyle = `rgba(200,200,235,${(0.3+0.3*tw9).toFixed(2)})`;
           ctx.fillText('uncharted', cx9, sy(s9.y)+TILE+4); }
       }
+      /* v80.2 — the shaft was an invisible blocker: never drawn, only blocking.
+         Drawn here, inside the astral landmark pass, so it sorts with everything else. */
+      if (typeof DEEP_SHAFT !== 'undefined' && onScreen(DEEP_SHAFT.x, DEEP_SHAFT.y)){
+        const cxs = sx(DEEP_SHAFT.x)+TILE/2, cys = sy(DEEP_SHAFT.y)+TILE/2;
+        const puls = 0.5+0.5*Math.sin(now/900);
+        /* warm breath coming up out of it — the stone down there is not astral */
+        const grs = ctx.createRadialGradient(cxs, cys, 2, cxs, cys, TILE*1.5);
+        grs.addColorStop(0, `rgba(255,150,70,${(0.13+0.09*puls).toFixed(2)})`);
+        grs.addColorStop(1, 'rgba(255,120,40,0)');
+        ctx.fillStyle = grs; ctx.fillRect(cxs-TILE*1.6, cys-TILE*1.6, TILE*3.2, TILE*3.2);
+        /* the rim: dead rock, lit on the sunward side like every other solid thing */
+        ctx.fillStyle = 'rgba(96,86,84,.95)';
+        ctx.beginPath(); ctx.ellipse(cxs, cys, TILE*0.52, TILE*0.36, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(140,128,120,.55)';
+        ctx.beginPath(); ctx.ellipse(cxs-TILE*0.07, cys-TILE*0.07, TILE*0.50, TILE*0.34, 0, Math.PI*0.9, Math.PI*1.95); ctx.fill();
+        /* the hole itself — no bottom, so no bottom is drawn */
+        ctx.fillStyle = '#05060a';
+        ctx.beginPath(); ctx.ellipse(cxs, cys, TILE*0.38, TILE*0.24, 0, 0, Math.PI*2); ctx.fill();
+        /* the spiral stair, winding down out of a sky with no down in it */
+        ctx.strokeStyle = 'rgba(150,138,128,.5)'; ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        for (let i=0;i<=34;i++){
+          const t = i/34, an = t*Math.PI*3.1, rr = (1-t*0.72);
+          const px = cxs + Math.cos(an)*TILE*0.34*rr, py = cys + Math.sin(an)*TILE*0.21*rr + t*TILE*0.10;
+          i ? ctx.lineTo(px,py) : ctx.moveTo(px,py);
+        }
+        ctx.stroke();
+        if (typeof deepOpen === 'function' && !deepOpen()){
+          ctx.font = 'italic 10px Georgia'; ctx.textAlign='center'; ctx.textBaseline='top';
+          ctx.fillStyle = `rgba(255,190,140,${(0.45+0.3*puls).toFixed(2)})`;
+          ctx.fillText('the hole in the sky', cxs, sy(DEEP_SHAFT.y)+TILE+3);
+        }
+      }
       { const gl9 = 0.5+0.5*Math.sin(now/700);
         if (onScreen(ORRERY.x,ORRERY.y)){
           const cx9 = sx(ORRERY.x)+TILE/2, cy9 = sy(ORRERY.y)+TILE/2;
