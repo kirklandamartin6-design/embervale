@@ -17071,6 +17071,29 @@ function drawMap(){
         draw(COMET.x, COMET.y, '💫', 22);
       }
     }
+    /* v80.8 — the Delve's way down was never drawn either. Same bug as the
+       shaft: click-routed and blocking, but no paint. You cleared a floor and
+       there was no ladder to find. */
+    if (plane === 'deep'){
+      const _dd = dun;
+      if (_dd && _dd.stair && onScreen(_dd.stair[0], _dd.stair[1])){
+        const [tx8,ty8] = _dd.stair, gx8 = sx(tx8), gy8 = sy(ty8);
+        const pul8 = 0.5+0.5*Math.sin(now/800);
+        const gr8 = ctx.createRadialGradient(gx8+TILE/2, gy8+TILE/2, 2, gx8+TILE/2, gy8+TILE/2, TILE*1.2);
+        gr8.addColorStop(0, `rgba(150,190,255,${(0.10+0.10*pul8).toFixed(2)})`);
+        gr8.addColorStop(1, 'rgba(150,190,255,0)');
+        ctx.fillStyle = gr8; ctx.fillRect(gx8-TILE*0.7, gy8-TILE*0.7, TILE*2.4, TILE*2.4);
+        ctx.fillStyle = '#05060a';
+        ctx.fillRect(gx8+TILE*0.10, gy8+TILE*0.10, TILE*0.80, TILE*0.80);
+        ctx.fillStyle = '#4a4450';
+        for (let i=0;i<4;i++) ctx.fillRect(gx8+TILE*(0.12+i*0.055), gy8+TILE*(0.70-i*0.155), TILE*(0.76-i*0.11), TILE*0.12);
+        ctx.strokeStyle = 'rgba(168,152,180,.8)'; ctx.lineWidth = 2;
+        ctx.strokeRect(gx8+TILE*0.09, gy8+TILE*0.09, TILE*0.82, TILE*0.82);
+        ctx.font = '10px Georgia'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = `rgba(200,215,255,${(0.6+0.3*pul8).toFixed(2)})`;
+        ctx.fillText('the way down', gx8+TILE/2, sy(ty8)+TILE+8);
+      }
+    }
     /* ---------- the manor: furniture, empty spaces, doorways, Pemberly ---------- */
     if (dun.house){
       const H = floorOf();
@@ -24432,6 +24455,165 @@ if (typeof astralQuestMarkers === 'function' && typeof DEEP_SHAFT !== 'undefined
     return d;
   };
   if (DUNGEONS.deep) DUNGEONS.deep.clearable = true;
+})();
+
+/* ============================================================================
+   v80.6 — THE RUNE VEINS WERE SEALING THE FLOOR
+   Reported by k: "rich veins block the way in delve."
+
+   deepGen joins its rooms with a spanning tree of L corridors that are ONE
+   TILE WIDE, and deepFreeTile then scatters monsters, ore veins and chests
+   onto any '.' tile at all — corridors included. Everything in dunBlockSet is
+   solid, so one rune vein in a corridor seals everything past it.
+
+   deepConnected() — the standing audit that cleared 800 floors — walks the
+   MASK ONLY. The mask is in fact perfectly connected (verified: 0/800
+   disconnected). It never asked whether an ENTITY could seal a corridor,
+   which is exactly what ASTRAL_BRIDGE was invented to prevent in the Starfall
+   build. That lesson never crossed over to the Delve.
+
+   Measured on the shipped generator, 800 floors across 40 seeds:
+     stair unreachable ............ 284 floors (35.5%)
+     floors with orphaned regions .. 579  (worst: 260 tiles cut off)
+     chests you could not reach .... 550
+     ore veins you could not reach . 817
+
+   The fix does not guess at what a corridor looks like. It places entities
+   under a PROVEN INVARIANT, one at a time:
+
+     after every placement, every unblocked floor tile is still reachable
+     from the entry, and the stair is still reachable.
+
+   A tile that would break that invariant is not a legal home, so a vein can
+   never seal anything by construction — the same guarantee deepGen gives for
+   the mask, extended to the things standing on it.
+   ========================================================================== */
+(function delveFloorsAreWalkable(){
+  if (typeof deepBuildFloor !== 'function') return;
+
+  const floorTilesOf = mask => {
+    const out = [];
+    for (let y = 0; y < mask.length; y++)
+      for (let x = 0; x < mask[0].length; x++)
+        if (mask[y][x] === '.') out.push([x,y]);
+    return out;
+  };
+  const reachFrom = (mask, start, blocked) => {
+    const seen = new Set([start[0]+','+start[1]]), q = [[start[0],start[1]]];
+    while (q.length){
+      const [x,y] = q.shift();
+      for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nx = x+dx, ny = y+dy, k = nx+','+ny;
+        if (ny < 0 || nx < 0 || ny >= mask.length || nx >= mask[0].length) continue;
+        if (seen.has(k) || mask[ny][nx] !== '.' || blocked.has(k)) continue;
+        seen.add(k); q.push([nx,ny]);
+      }
+    }
+    return seen;
+  };
+  const adjacent = (reach, x, y) =>
+    [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => reach.has((x+dx)+','+(y+dy)));
+
+  window.delveRescue = function(dun){
+    if (!dun || !dun.mask || !dun.entry) return dun;
+    const mask = dun.mask, all = floorTilesOf(mask);
+    const total = all.length;
+    const ents = []
+      .concat((dun.monsters||[]).map(a => ({a, ix:1})))
+      .concat((dun.rocks   ||[]).map(a => ({a, ix:1})))
+      .concat((dun.chests  ||[]).map(a => ({a, ix:0})));
+
+    const entryK = dun.entry[0]+','+dun.entry[1];
+    const stairK = dun.stair ? dun.stair[0]+','+dun.stair[1] : null;
+    const blocked = new Set();
+
+    /* would putting a body on (x,y) still leave every open tile reachable? */
+    const legal = (x,y) => {
+      const k = x+','+y;
+      if (k === entryK || k === stairK || blocked.has(k)) return false;
+      if (mask[y][x] !== '.') return false;
+      blocked.add(k);
+      const reach = reachFrom(mask, dun.entry, blocked);
+      const ok = reach.size === total - blocked.size
+              && (!stairK || reach.has(stairK))
+              && adjacent(reach, x, y)
+              /* and nothing already down here gets walled in by this one */
+              && placed.every(q => adjacent(reach, q.a[q.ix], q.a[q.ix+1]));
+      blocked.delete(k);
+      return ok;
+    };
+
+    const placed = [];
+    for (const e of ents){
+      const x = e.a[e.ix], y = e.a[e.ix+1];
+      if (legal(x,y)){ blocked.add(x+','+y); placed.push(e); continue; }
+      /* its own tile seals something — walk the floor for one that does not */
+      let ok = false;
+      for (let i = 0; i < all.length; i++){
+        const [px,py] = all[(i * 7 + 13) % all.length];   /* stride, so bodies do not clump */
+        if (!legal(px,py)) continue;
+        e.a[e.ix] = px; e.a[e.ix+1] = py;
+        blocked.add(px+','+py); placed.push(e); ok = true; break;
+      }
+      if (!ok){        /* nowhere legal at all — drop it rather than seal the floor */
+        e.a[e.ix] = dun.entry[0]; e.a[e.ix+1] = dun.entry[1];
+        e.drop = true;
+      }
+    }
+    if (ents.some(e => e.drop)){
+      const dead = new Set(ents.filter(e => e.drop).map(e => e.a));
+      if (dun.monsters) dun.monsters = dun.monsters.filter(a => !dead.has(a));
+      if (dun.rocks)    dun.rocks    = dun.rocks.filter(a => !dead.has(a));
+      if (dun.chests)   dun.chests   = dun.chests.filter(a => !dead.has(a));
+    }
+    delete dun._blocks; delete dun._mons; delete dun._rocks; delete dun._trees; delete dun._spots;
+    return dun;
+  };
+
+  deepBuildFloor = (function(_dbf){
+    return function(floor){
+      const dun = _dbf.call(this, floor);
+      try { delveRescue(dun); } catch(e){}
+      return dun;
+    };
+  })(deepBuildFloor);
+  if (DUNGEONS.deep){ try { delveRescue(DUNGEONS.deep); } catch(e){} }
+})();
+
+/* ============================================================================
+   v80.7 — THE BODY YOU JUST KILLED WAS STILL STANDING THERE
+   Reported by k: "invisible monsters also popped up where i just killed one."
+
+   dunMons() filters slain bodies out of the DRAW list when a dungeon is
+   clearable — but dunBlockSet() adds every entry of dun.monsters to the solid
+   set and caches it once, with no such filter. So a felled monster leaves an
+   invisible wall exactly where it died: nothing to see, nothing to fight, and
+   you cannot walk through it.
+
+   Latent in every clearable dungeon since the block-set cache was introduced;
+   it only became obvious in the Delve because v80.5 made those floors
+   clearable and their corridors are one tile wide, so a dead body in one
+   plugs the route completely.
+
+   The set is rebuilt when the slain count changes, which keeps the v40 cache
+   doing its job (it exists because six .some() scans per tile made a 152x102
+   plane unpathable) while staying honest about what is actually there.
+   ========================================================================== */
+(function slainBodiesDoNotBlock(){
+  if (typeof dunBlockSet !== 'function') return;
+  const _dbs = dunBlockSet;
+  dunBlockSet = function(dun){
+    if (!dun || !dun.clearable || typeof dunSlain === 'undefined') return _dbs.call(this, dun);
+    if (dun._blocks && dun._blkSlain === dunSlain.size) return dun._blocks;
+    delete dun._blocks;
+    const s = _dbs.call(this, dun);
+    for (const m of (dun.monsters||[])){
+      const k = m[1]+','+m[2];
+      if (dunSlain.has(k)) s.delete(k);
+    }
+    dun._blocks = s; dun._blkSlain = dunSlain.size;
+    return s;
+  };
 })();
 
 updateProfilePreviews();
