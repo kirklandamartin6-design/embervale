@@ -18994,15 +18994,31 @@ function renderSlayer(grid){
   const t = p.slay;
   if (t){
     const s = SLAY_BY_ID[t.id];
-    row(`<span>${s.i}</span><span class="sn"><b>${t.done}/${t.need} × ${s.n}</b><br><small>They keep to ${slayWhereTxt(s)} · Slayer ${s.slv}</small></span>`);
+    if (s){
+      row(`<span>${s.i}</span><span class="sn"><b>${t.done}/${t.need} × ${s.n}</b><br><small>They keep to ${slayWhereTxt(s)} · Slayer ${s.slv}</small></span>`);
+    } else {
+      /* ordinary quarry — not one of the sixteen, and it has no SLAY_BY_ID row */
+      const nm = typeof slayTaskName === 'function' ? slayTaskName(t.id) : t.id;
+      const ic = typeof slayTaskIcon === 'function' ? slayTaskIcon(t.id) : '\u{1F5E1}\uFE0F';
+      const wh = typeof slayCommonWhere === 'function' ? slayCommonWhere(t.id) : 'the world above';
+      row(`<span>${ic}</span><span class="sn"><b>${t.done}/${t.need} × ${nm}</b><br><small>They keep to ${wh} · ordinary quarry, 60% Slayer xp</small></span>`);
+    }
   } else {
     row(`<span>📋</span><span class="sn"><b>No assignment.</b><br><small>Take one from a master below.</small></span>`);
   }
   for (const m of SLAY_MASTERS){
     const open = masterOpen(m), pool = open ? slayPool(m) : [];
-    const why = !m.ready ? '— not yet taking assignments' : lv < m.slv ? `— needs Slayer ${m.slv}` : !pool.length ? '— nothing suits you yet' : '';
-    row(`<span>${m.i}</span><span class="sn"><b>${m.n}</b> ${why?`<span style="color:var(--red)">${why}</span>`:''}<br><small>${m.d} · ${m.pts} pts/task</small></span>`);
-    if (open && pool.length && !t) btn(`${m.i} Take an assignment from ${m.n}`, () => slayAssign(m.id));
+    /* the board is the sixteen PLUS the ordinary quarry this master will set —
+       counting only the sixteen hid the button entirely below Slayer 5 */
+    const common = (open && typeof slayCommonPool === 'function') ? slayCommonPool(m) : [];
+    const total = pool.length + common.length;
+    const why = !m.ready ? '— not yet taking assignments'
+              : lv < m.slv ? `— needs Slayer ${m.slv}`
+              : !total ? '— nothing suits you yet' : '';
+    const board = (open && total)
+      ? `<br><small style="opacity:.6">on the board: ${pool.length} of the sixteen · ${common.length} ordinary</small>` : '';
+    row(`<span>${m.i}</span><span class="sn"><b>${m.n}</b> ${why?`<span style="color:var(--red)">${why}</span>`:''}<br><small>${m.d} · ${m.pts} pts/task</small>${board}</span>`);
+    if (open && total && !t) btn(`${m.i} Take an assignment from ${m.n}`, () => slayAssign(m.id));
   }
   /* the shop */
   row(`<span>🏵️</span><span class="sn"><b>The Guild board</b><br><small>Spend what you have been paid.</small></span>`);
