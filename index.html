@@ -24400,6 +24400,40 @@ if (typeof astralQuestMarkers === 'function' && typeof DEEP_SHAFT !== 'undefined
   };
 })();
 
+/* ============================================================================
+   v80.5 — NOTHING IN THE DELVE EVER DIED
+   Reported by k: "none of the monsters are actually clearing in the delve."
+   Exactly right, and it is not a Delve bug — it is a missing flag.
+
+   Base monsterFelled removes a body like this:
+       if (dunNow && dunNow.clearable && combat.spawn){ dunSlain.add(...) ... return; }
+   and if that branch does NOT run, and the plane is not 'over', it falls all
+   the way through to the bottom of the function:
+       combat.mhp = mon.hp; ... fx.push(`a new ${mon.n} appears…`);
+   — it heals the corpse back to full and keeps the fight open.
+
+   `DUNGEONS.deep` is built fresh every floor by deepBuildFloor() and has never
+   carried `clearable`. So every Descent fight was infinite: kill it, "a new X
+   appears…", forever. The floor never emptied, dunSlain stayed 0, and there
+   was no way to finish an encounter. Measured before the fix: 40 consecutive
+   kills, 0 monsters removed, combat never closed.
+
+   The v76 notes warn that any new DUNGEONS entry must carry pillars/trees/
+   spots/deco/npcs/torches because the draw loop iterates them unguarded. Same
+   lesson, one field further: the FELLED path has required keys too.
+   ========================================================================== */
+(function delveFloorsAreClearable(){
+  if (typeof deepBuildFloor !== 'function') return;
+  const _dbf = deepBuildFloor;
+  deepBuildFloor = function(floor){
+    const d = _dbf.call(this, floor);
+    if (d) d.clearable = true;
+    if (DUNGEONS.deep) DUNGEONS.deep.clearable = true;
+    return d;
+  };
+  if (DUNGEONS.deep) DUNGEONS.deep.clearable = true;
+})();
+
 updateProfilePreviews();
 </script>
 </body>
